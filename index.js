@@ -968,4 +968,4 @@ if (interaction.isModalSubmit()) {
 
 client.on('messageCreate', execute);
 
-client.login(process.env.TOKEN); 
+client.login(process.env.TOKEN);  
