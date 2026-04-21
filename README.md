@@ -1,7 +1,7 @@
 # PROJET CRYSTAL 💎 (et oe)
 
 ## Description
-Ceci est le bot Discord pour **l'Empire Du 🌍**.  
+Ceci est le bot Discord pour [**l'Empire Du 🌍](https://discord.gg/wTgUpmtK5A)**.  
 Il contient un système d'économie originale et propre à l'empire.
 
 ---
