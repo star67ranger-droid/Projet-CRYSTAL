@@ -25,7 +25,7 @@ import {
 import dotenv from 'dotenv';
 import { createCanvas, loadImage } from 'canvas';
 import { execute } from './src/events.js';
-import { getUser, updateCrystals, updateMineStreak, updateLastMessageTime, getUserRank, getLeaderboard, getTotalCrystals, getTotalUsers, getRichestUser, claimCode, getCodes, addCode, removeCode } from './src/database.js';
+import { getUser, updateCrystals, updateMineStreak, updateLastMessageTime, getUserRank, getLeaderboard, getTotalCrystals, getTotalUsers, getRichestUser, claimCode, getCodes, addCode, removeCode, registerDrop, claimDrop } from './src/database.js';
 import { formatNumber, getMineCrystals } from './src/events.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -467,15 +467,16 @@ const mine = {
         }
 
         const lastMineTime = user.lastMineTime || 0;
-        const daysSinceLastMine = Math.floor((now - lastMineTime) / COOLDOWN);
+        // Fenêtre de 48h — évite de perdre sa série pour 2 minutes de décalage
+        const hoursSinceLastMine = (now - lastMineTime) / 3600000;
 
         let streak = user.mineStreak || 0;
         if (lastMineTime === 0) {
-            streak = 1;
-        } else if (daysSinceLastMine === 1) {
-            streak += 1;
+            streak = 1; // tout premier mine
+        } else if (hoursSinceLastMine <= 48) {
+            streak += 1; // dans la fenêtre — streak continue
         } else {
-            streak = 1;
+            streak = 1; // plus de 48h — streak cassé
         }
 
         const streakCapped = Math.min(streak, 5);
@@ -674,6 +675,9 @@ const dropcrystal = {
 
         const dropId = `drop_crystal_button_${amount}_${Date.now()}`;
 
+        // On enregistre le drop en BDD dès maintenant — claimed_by = NULL
+        registerDrop(dropId);
+
         const container = new ContainerBuilder()
             .setAccentColor(0x57F287)
             .addTextDisplayComponents(new TextDisplayBuilder().setContent('## CRYSTALS DROP <a:788708discordchristmas:1485721082119065620>'))
@@ -821,8 +825,17 @@ client.on('interactionCreate', async interaction => {
         if (customId.startsWith('drop_crystal_button_')) {
             const amount = parseInt(customId.split('_')[3]);
             const userId = interaction.user.id;
-            const user = getUser(userId);
 
+            // Tentative de claim atomique — si quelqu'un a déjà cliqué, claimDrop retourne false
+            const success = claimDrop(customId, userId);
+            if (!success) {
+                return interaction.reply({
+                    content: '<a:51047animatedarrowwhite:1483033113134239827> Trop tard, quelqu\'un a déjà récupéré ce drop !',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            const user = getUser(userId);
             updateCrystals(userId, user.crystals + amount, user.crystalsToday);
 
             const disabledContainer = new ContainerBuilder()
