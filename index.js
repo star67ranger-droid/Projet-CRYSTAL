@@ -24,9 +24,9 @@ import {
 } from 'discord.js';
 import dotenv from 'dotenv';
 import { createCanvas, loadImage } from 'canvas';
-import { execute } from './src/events.js';
+import { execute } from './src/messagecreate.js';
 import { getUser, updateCrystals, updateMineStreak, updateLastMessageTime, getUserRank, getLeaderboard, getTotalCrystals, getTotalUsers, getRichestUser, claimCode, getCodes, addCode, removeCode, registerDrop, claimDrop } from './src/database.js';
-import { formatNumber, getMineCrystals } from './src/events.js';
+import { formatNumber, getMineCrystals } from './src/messagecreate.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
