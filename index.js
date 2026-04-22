@@ -63,7 +63,7 @@ const pingCommand = {
         const container = new ContainerBuilder()
             .setAccentColor(0x57F287)
             .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('## <a:51047animatedarrowwhite:1483033113134239827> Pong! 🏓')
+                new TextDisplayBuilder().setContent('## <a:51047animatedarrowwhite:1483033113134239827> Pong! <:discotoolsxyzicon16:1496223650490089754>')
             )
             .addSeparatorComponents(
                 new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
@@ -90,7 +90,7 @@ const botinfoCommand = {
             .addSectionComponents(
                 new SectionBuilder()
                     .addTextDisplayComponents(
-                        new TextDisplayBuilder().setContent(`## <a:51047animatedarrowwhite:1483033113134239827> Informations sur le bot ${client.user.username}`)
+                        new TextDisplayBuilder().setContent(`## <a:51047animatedarrowwhite:1483033113134239827> Informations sur le bot ${client.user.username} <:discotoolsxyzicon18:1496223647025725622>`)
                     )
                     .setThumbnailAccessory(
                         new ThumbnailBuilder().setURL(client.user.displayAvatarURL({ format: 'png', size: 512 }))
@@ -100,11 +100,11 @@ const botinfoCommand = {
                 new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
             )
             .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(`> **Nom** : ${client.user.username}`),
-                new TextDisplayBuilder().setContent(`> **ID** : ${client.user.id}`),
-                new TextDisplayBuilder().setContent(`> **Créateur** : Tortue Normande`),
+                new TextDisplayBuilder().setContent(`> **Nom** : ${client.user.username} <:dfgvdfgvxdfgvx9:1496538747594870936>`),
+                new TextDisplayBuilder().setContent(`> **ID** : ${client.user.id} <:dfgvdfgvxdfgvx8:1496538744527325440>`),
+                new TextDisplayBuilder().setContent(`> **Créateur** : Tortue Normande <@1482698332462776360> <:1483039713702055946:1483039713702055946>`),
                 new TextDisplayBuilder().setContent(`> **Langage de programmation** : JavaScript (discord.js) <:19915discordjs:1483039713702055946>`),
-                new TextDisplayBuilder().setContent(`> **Version** : 1.0.0`)
+                new TextDisplayBuilder().setContent(`> **Version** : 1.0.0 <:discotoolsxyzicon6:1496223667464442018>`)
             )
             .addMediaGalleryComponents(
                 new MediaGalleryBuilder().addItems(
@@ -127,7 +127,7 @@ const helpCommand = {
         const container = new ContainerBuilder()
             .setAccentColor(0x57F287)
             .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('## <a:51047animatedarrowwhite:1483033113134239827> Commandes disponibles')
+                new TextDisplayBuilder().setContent('## <a:51047animatedarrowwhite:1483033113134239827> Commandes disponibles <:discotoolsxyzicon9:1496223663895216138>')
             )
             .addSeparatorComponents(
                 new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
@@ -173,7 +173,7 @@ const suggestionCommand = {
     async execute(interaction) {
         const modal = new ModalBuilder()
             .setCustomId('suggestion_modal')
-            .setTitle('Soumettre une suggestion')
+            .setTitle('Soumettre une suggestion <:dfgvdfgvxdfgvx12:1496538754045968505>')
             .addComponents(
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
@@ -194,7 +194,7 @@ const reportCommand = {
     async execute(interaction) {
         const modal = new ModalBuilder()
             .setCustomId('report_modal')
-            .setTitle('Signaler un problème')
+            .setTitle('Signaler un problème <:discotoolsxyzicon17:1496223649244516572>')
             .addComponents(
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
@@ -236,7 +236,7 @@ async function generateLeaderboardImage(members) {
     ctx.fillStyle = '#57F287';
     ctx.font = `bold ${32 * SCALE}px Sans`;
     ctx.textAlign = 'center';
-    ctx.fillText('CRYSTAL LEADERBOARD', WIDTH / 2, HEADER_H - 20 * SCALE);
+    ctx.fillText('🏆 CRYSTAL LEADERBOARD', WIDTH / 2, HEADER_H - 20 * SCALE);
 
     for (let i = 0; i < members.length; i++) {
         const { id, crystals, username } = members[i];
@@ -380,7 +380,7 @@ const profilCommand = {
                 .setAccentColor(targetMember?.displayColor || 0x57F287)
                 .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
                 .addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent('## <a:51047animatedarrowwhite:1483033113134239827> Profil du BOT <@' + userId + '> <a:diamond20754_256:1483033372904132668>')
+                    new TextDisplayBuilder().setContent('## <a:51047animatedarrowwhite:1483033113134239827> Profil du BOT <@' + userId + '> <:discotoolsxyzicon18:1496223647025725622>')
                 )
                 .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
                 .addSectionComponents(
@@ -409,7 +409,7 @@ const profilCommand = {
             .setAccentColor(targetMember?.displayColor || 0x57F287)
             .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
             .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('## <a:51047animatedarrowwhite:1483033113134239827> Profil de <@' + userId + '> <a:diamond20754_256:1483033372904132668>')
+                new TextDisplayBuilder().setContent('## <a:51047animatedarrowwhite:1483033113134239827> Profil de <@' + userId + '> <:dfgvdfgvxdfgvx14:1496538757120262145>')
             )
             .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
             .addSectionComponents(
@@ -461,7 +461,7 @@ const mine = {
             const minutes = Math.floor((remainingSec % 3600) / 60);
             const seconds = remainingSec % 60;
             return interaction.reply({
-                content: `<a:51047animatedarrowwhite:1483033113134239827> Tu es en cooldown ! Attends encore **${hours}h ${minutes}m ${seconds}s** avant de miner à nouveau.`,
+                content: `<a:51047animatedarrowwhite:1483033113134239827> Tu es en cooldown ! Attends encore **${hours}h ${minutes}m ${seconds}s** avant de miner à nouveau. <:discotoolsxyzicon15:1496223652411080884>`,
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -490,7 +490,7 @@ const mine = {
         const container = new ContainerBuilder()
             .setAccentColor(0x57F287)
             .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('## <a:windmill20748_256:1486455794798034994> Minage de CRYSTALs')
+                new TextDisplayBuilder().setContent('## <:pioche:1496545139575881818> Minage de CRYSTALs')
             )
             .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
             .addSectionComponents(
@@ -504,7 +504,7 @@ const mine = {
             )
             .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
             .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(`> **STREAK** : ${streak} jour(s) <a:flame21186_256:1486455204357476403>`),
+                new TextDisplayBuilder().setContent(`> **STREAK** : ${streak} jour(s) <:dfgvdfgvxdfgvx6:1496538740800360549>`),
                 new TextDisplayBuilder().setContent(`> **Prochain minage** : <t:${Math.floor((now + COOLDOWN) / 1000)}:R>`)
             );
 
@@ -555,7 +555,7 @@ const paycrystal = {
         updateCrystals(recipient.id, recipientUser.crystals + amount, recipientUser.crystalsToday);
 
         return interaction.reply({
-            content: `Tu as envoyé **${formatNumber(amount)}** CRYSTALs à <@${recipient.id}>.`,
+            content: `Tu as envoyé **${formatNumber(amount)}** CRYSTALs à <@${recipient.id}> <:dfgvdfgvxdfgvx10:1496538750308581559>`,
             flags: MessageFlags.Ephemeral
         });
     }
@@ -572,7 +572,7 @@ function buildSettingsContainer(interactionUserId) {
     return new ContainerBuilder()
         .setAccentColor(0x57F287)
         .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent('## <a:51047animatedarrowwhite:1483033113134239827> Paramètres du bot')
+            new TextDisplayBuilder().setContent('## <:dfgvdfgvxdfgvx5:1496538739030364260> Paramètres du bot')
         )
         .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
         .addTextDisplayComponents(
@@ -625,7 +625,7 @@ const addcrystal = {
         const user = getUser(targetUser.id);
         updateCrystals(targetUser.id, user.crystals + amount, user.crystalsToday);
 
-        return interaction.reply({ content: `Ajouté **${formatNumber(amount)}** CRYSTALs à <@${targetUser.id}>.`, flags: MessageFlags.Ephemeral });
+        return interaction.reply({ content: `Ajouté **${formatNumber(amount)}** CRYSTALs à <@${targetUser.id}> <:discotoolsxyzicon11:1496223660325736559>`, flags: MessageFlags.Ephemeral });
     }
 };
 
@@ -651,7 +651,7 @@ const removecrystal = {
         }
 
         updateCrystals(targetUser.id, user.crystals - amount, user.crystalsToday);
-        return interaction.reply({ content: `Retiré **${formatNumber(amount)}** CRYSTALs à <@${targetUser.id}>.`, flags: MessageFlags.Ephemeral });
+        return interaction.reply({ content: `Retiré **${formatNumber(amount)}** CRYSTALs à <@${targetUser.id}> <:discotoolsxyzicon12:1496223659029823709>`, flags: MessageFlags.Ephemeral });
     }
 };
 
@@ -680,7 +680,7 @@ const dropcrystal = {
 
         const container = new ContainerBuilder()
             .setAccentColor(0x57F287)
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent('## CRYSTALS DROP <a:788708discordchristmas:1485721082119065620>'))
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent('## <:discotoolsxyzicon16:1496223650490089754> CRYSTALS DROP'))
             .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
             .addSectionComponents(
                 new SectionBuilder()
@@ -712,8 +712,8 @@ const resetcrystal = {
         if (targetUser.bot) return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu ne peux pas réinitialiser un bot.', flags: MessageFlags.Ephemeral });
 
         updateCrystals(targetUser.id, 0, 0);
-        await interaction.channel.send(`<a:15770animatedarrowyellow:1483033107472056320> Les CRYSTALs de <@${targetUser.id}> ont été réinitialisés.`);
-        return interaction.reply({ content: `<a:51047animatedarrowwhite:1483033113134239827> Les CRYSTALs de <@${targetUser.id}> ont été réinitialisés.`, flags: MessageFlags.Ephemeral });
+        await interaction.channel.send(`<a:15770animatedarrowyellow:1483033107472056320> Les CRYSTALs de <@${targetUser.id}> ont été réinitialisés <:discotoolsxyzicon15:1496223652411080884>.`);
+        return interaction.reply({ content: `<a:51047animatedarrowwhite:1483033113134239827> Les CRYSTALs de <@${targetUser.id}> ont été réinitialisés <:discotoolsxyzicon15:1496223652411080884>.`, flags: MessageFlags.Ephemeral });
     }
 };
 
@@ -723,7 +723,7 @@ function buildTrackerContainer(totalCrystals, totalUsers, richestUser, interacti
     return new ContainerBuilder()
         .setAccentColor(0x57F287)
         .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent('## <a:51047animatedarrowwhite:1483033113134239827> Statistiques économiques du serveur')
+            new TextDisplayBuilder().setContent('## <:discotoolsxyzicon20:1496223642173047057> Statistiques économiques du serveur')
         )
         .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
         .addTextDisplayComponents(
@@ -840,12 +840,12 @@ client.on('interactionCreate', async interaction => {
 
             const disabledContainer = new ContainerBuilder()
                 .setAccentColor(0x57F287)
-                .addTextDisplayComponents(new TextDisplayBuilder().setContent('## CRYSTALS DROP <a:788708discordchristmas:1485721082119065620>'))
+                .addTextDisplayComponents(new TextDisplayBuilder().setContent('## <:discotoolsxyzicon16:1496223650490089754> CRYSTALS DROP'))
                 .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
                 .addSectionComponents(
                     new SectionBuilder()
                         .addTextDisplayComponents(
-                            new TextDisplayBuilder().setContent('**' + formatNumber(amount) + ' CRYSTALs** ont été récupérés !'),
+                            new TextDisplayBuilder().setContent('**' + formatNumber(amount) + ' CRYSTALs** ont été récupérés <:discotoolsxyzicon16:1496223650490089754> !'),
                             new TextDisplayBuilder().setContent('<@' + userId + '> a récupéré le drop !')
                         )
                         .setButtonAccessory(
@@ -874,7 +874,7 @@ client.on('interactionCreate', async interaction => {
             const isAdd = customId === 'add_code';
             const modal = new ModalBuilder()
                 .setCustomId(isAdd ? 'code_modal_add' : 'code_modal_remove')
-                .setTitle(isAdd ? 'Ajouter un code' : 'Supprimer un code')
+                .setTitle(isAdd ? 'Ajouter un code <:discotoolsxyzicon11:1496223660325736559>' : 'Supprimer un code <:discotoolsxyzicon12:1496223659029823709>')
                 .addComponents(
                     new ActionRowBuilder().addComponents(
                         new TextInputBuilder().setCustomId('code_input').setLabel('Code').setStyle(TextInputStyle.Short).setRequired(true)
@@ -929,7 +929,7 @@ client.on('interactionCreate', async interaction => {
 
             const modal = new ModalBuilder()
                 .setCustomId('code_modal_claim')
-                .setTitle('Réclamer un code')
+                .setTitle('Réclamer un code <:dfgvdfgvxdfgvx10:1496538750308581559>')
                 .addComponents(
                     new ActionRowBuilder().addComponents(
                         new TextInputBuilder().setCustomId('code_input').setLabel('Code à réclamer').setStyle(TextInputStyle.Short).setRequired(true)
