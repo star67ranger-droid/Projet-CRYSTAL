@@ -561,7 +561,7 @@ const paycrystal = {
     }
 };
 
-// ─── Settings ─────────────────────────────────────────────────────────────────
+// ─── Settings ────────────────────────────────────────────────────────────────
 
 function buildSettingsContainer(interactionUserId) {
     const codes = getCodes();
