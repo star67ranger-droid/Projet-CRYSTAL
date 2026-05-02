@@ -94,6 +94,34 @@ function updateCrystals(userId, crystals, crystalsToday) {
     updateCrystalsStmt.run(crystals, crystalsToday, userId);
 }
 
+function transferCrystalsAtomic(senderId, recipientId, amount) {
+    return db.transaction(() => {
+        const sender = getUser(senderId);
+        if (sender.crystals < amount) {
+            return { success: false, message: `<a:51047animatedarrowwhite:1483033113134239827> Tu n'as que **${sender.crystals}** CRYSTALs, tu ne peux pas en envoyer **${amount}**.` };
+        }
+        // Prend 5% de la somme envoyée, LES TAXES BG
+        const tax = Math.floor(amount * 0.05);
+        const recipientUser = getUser(recipientId);
+        updateCrystals(senderId, sender.crystals - amount, sender.crystalsToday);
+        updateCrystals(recipientId, recipientUser.crystals + amount - tax, recipientUser.crystalsToday);
+        return { success: true, message: `Tu as envoyé **${amount}** CRYSTALs à <@${recipientId}> <:dfgvdfgvxdfgvx10:1496538750308581559>` };
+    })();
+}
+
+function claimDropAndAwardCrystalsAtomic(dropId, userId, amount) {
+    return db.transaction(() => {
+        const result = claimDropStmt.run(userId, dropId);
+        if (result.changes === 0) {
+            return { success: false, message: '<a:51047animatedarrowwhite:1483033113134239827> Trop tard, quelqu\'un a déjà récupéré ce drop !' };
+        }
+
+        const user = getUser(userId);
+        updateCrystals(userId, user.crystals + amount, user.crystalsToday);
+        return { success: true, message: `**${amount}** CRYSTALs ont été récupérés <:discotoolsxyzicon16:1496223650490089754> !` };
+    })();
+}
+
 const updateLastMessageTimeStmt = db.prepare(
     'UPDATE users SET lastMessageTime = ? WHERE user_id = ?'
 );
@@ -239,4 +267,6 @@ export {
     getUserRank,
     registerDrop,
     claimDrop,
+    transferCrystalsAtomic,
+    claimDropAndAwardCrystalsAtomic,
 };

@@ -19,13 +19,11 @@ import {
     ActionRowBuilder,
     TextInputBuilder,
     TextInputStyle,
-    EmbedBuilder,
-
 } from 'discord.js';
 import dotenv from 'dotenv';
 import { createCanvas, loadImage } from 'canvas';
 import { execute } from './src/messagecreate.js';
-import { getUser, updateCrystals, updateMineStreak, updateLastMessageTime, getUserRank, getLeaderboard, getTotalCrystals, getTotalUsers, getRichestUser, claimCode, getCodes, addCode, removeCode, registerDrop, claimDrop } from './src/database.js';
+import { getUser, updateCrystals, updateMineStreak, updateLastMessageTime, getUserRank, getLeaderboard, getTotalCrystals, getTotalUsers, getRichestUser, claimCode, getCodes, addCode, removeCode, registerDrop, claimDrop, transferCrystalsAtomic, claimDropAndAwardCrystalsAtomic } from './src/database.js';
 import { formatNumber, getMineCrystals } from './src/messagecreate.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -36,6 +34,10 @@ const __dirname = dirname(__filename);
 const crystalIcon = await loadImage(join(__dirname, 'assets', 'Crystals_logo_nobg.png'));
 
 
+const COOLDOWN_24_HOURS = 86400000;
+const STREAK_WINDOW_HOURS = 48;
+const DEVELOPER_ID = process.env.DEVELOPER_ID || '1102675129927991331';
+const saloncomds
 
 dotenv.config();
 
@@ -133,15 +135,15 @@ const helpCommand = {
                 new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
             )
             .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('> **</profil:1482698332462776360> [utilisateur]** : Voir ton profil CRYSTAL'),
-                new TextDisplayBuilder().setContent('> **</mine:1486446312709947464>** : Miner des CRYSTALs, max 1 fois/24h'),
-                new TextDisplayBuilder().setContent('> **</pay_crystal:1485964356687499346> [utilisateur] [montant]** : Payer un autre joueur'),
-                new TextDisplayBuilder().setContent('> **</ping:1486462852352053499>** : Tester la latence du bot'),
-                new TextDisplayBuilder().setContent('> **</botinfo:1486462852352053500>** : Infos générales du bot'),
-                new TextDisplayBuilder().setContent('> **</help:1486655907097215066>** : Afficher ce menu'),
-                new TextDisplayBuilder().setContent('> **</top_crystals:1487382097449586761>** : Afficher le classement des utilisateurs les plus riches'),
-                new TextDisplayBuilder().setContent('> **</suggestion:1487497763234250975>** : Soumettre une suggestion pour améliorer le bot'),
-                new TextDisplayBuilder().setContent('> **</report:1487499249913692352>** : Signaler un bug ou un problème au créateur du bot')
+                new TextDisplayBuilder().setContent('> **</profil>** [utilisateur] : Voir ton profil CRYSTAL'),
+                new TextDisplayBuilder().setContent('> **</mine>** : Miner des CRYSTALs, max 1 fois/24h'),
+                new TextDisplayBuilder().setContent('> **</pay_crystal>** [utilisateur] [montant] : Payer un autre joueur'),
+                new TextDisplayBuilder().setContent('> **</ping>** : Tester la latence du bot'),
+                new TextDisplayBuilder().setContent('> **</botinfo>** : Infos générales du bot'),
+                new TextDisplayBuilder().setContent('> **</help>** : Afficher ce menu'),
+                new TextDisplayBuilder().setContent('> **</top_crystals>** : Afficher le classement des utilisateurs les plus riches'),
+                new TextDisplayBuilder().setContent('> **</suggestion>** : Soumettre une suggestion pour améliorer le bot'),
+                new TextDisplayBuilder().setContent('> **</report>** : Signaler un bug ou un problème au créateur du bot')
 
             )
             .addSeparatorComponents(
@@ -150,12 +152,12 @@ const helpCommand = {
 
         if (interaction.member.permissions.has('Administrator')) {
             container.addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('> **</add_crystal:1485707133877092362> [utilisateur] [montant]** : [ADMIN] Ajoute des CRYSTALs à un utilisateur.'),
-                new TextDisplayBuilder().setContent('> **</remove_crystal:1485714758454870037> [utilisateur] [montant]** : [ADMIN] Retire des CRYSTALs à un utilisateur.'),
-                new TextDisplayBuilder().setContent('> **</drop_crystal:1485933253096509440> [montant] [salon]** : [ADMIN] Fait tomber des CRYSTALs, le premier qui clique les gagne.'),
-                new TextDisplayBuilder().setContent('> **</reset_crystal:1486386894530150430> [utilisateur]** : [ADMIN] Réinitialise les CRYSTALs d\'un utilisateur.'),
-                new TextDisplayBuilder().setContent('> **</tracker_economie:1486629718487728169>** : Affiche les statistiques économiques du serveur.'),
-                new TextDisplayBuilder().setContent('> **</settings:1487054861383241841>** : Gérer les paramètres du bot (codes de récompense, etc.)')
+                new TextDisplayBuilder().setContent('> **</add_crystal>** [utilisateur] [montant] : [ADMIN] Ajoute des CRYSTALs à un utilisateur.'),
+                new TextDisplayBuilder().setContent('> **</remove_crystal>** [utilisateur] [montant] : [ADMIN] Retire des CRYSTALs à un utilisateur.'),
+                new TextDisplayBuilder().setContent('> **</drop_crystal>** [montant] [salon] : [ADMIN] Fait tomber des CRYSTALs, le premier qui clique les gagne.'),
+                new TextDisplayBuilder().setContent('> **</reset_crystal>** [utilisateur] : [ADMIN] Réinitialise les CRYSTALs d\'un utilisateur.'),
+                new TextDisplayBuilder().setContent('> **</tracker_economie>** : Affiche les statistiques économiques du serveur.'),
+                new TextDisplayBuilder().setContent('> **</settings>** : Gérer les paramètres du bot (codes de récompense, etc.)')
             );
         }
 
@@ -238,6 +240,17 @@ async function generateLeaderboardImage(members) {
     ctx.textAlign = 'center';
     ctx.fillText('🏆 CRYSTAL LEADERBOARD', WIDTH / 2, HEADER_H - 20 * SCALE);
 
+    const avatarLoadPromises = members.map(async (member) => {
+        try {
+            const avatarUrl = `https://cdn.discordapp.com/avatars/${member.id}/${member.avatar}.png?size=128`;
+            return { id: member.id, avatar: await loadImage(avatarUrl) };
+        } catch {
+            return { id: member.id, avatar: null };
+        }
+    });
+    const loadedAvatars = await Promise.all(avatarLoadPromises);
+    const avatarMap = new Map(loadedAvatars.map(a => [a.id, a.avatar]));
+
     for (let i = 0; i < members.length; i++) {
         const { id, crystals, username } = members[i];
         const y = HEADER_H + i * (ROW_H + GAP);
@@ -253,9 +266,8 @@ async function generateLeaderboardImage(members) {
         ctx.textAlign = 'left';
         ctx.fillText(medal, PADDING + 10 * SCALE, y + ROW_H / 2 + 8 * SCALE);
 
-        try {
-            const avatarUrl = `https://cdn.discordapp.com/avatars/${id}/${members[i].avatar}.png?size=128`;
-            const avatar = await loadImage(avatarUrl);
+        const avatar = avatarMap.get(id);
+        if (avatar) {
             ctx.save();
             ctx.beginPath();
             ctx.arc(PADDING + 80 * SCALE, y + ROW_H / 2, 22 * SCALE, 0, Math.PI * 2);
@@ -263,7 +275,7 @@ async function generateLeaderboardImage(members) {
             ctx.clip();
             ctx.drawImage(avatar, PADDING + 58 * SCALE, y + ROW_H / 2 - 22 * SCALE, 44 * SCALE, 44 * SCALE);
             ctx.restore();
-        } catch {
+        } else {
             ctx.fillStyle = '#57F287';
             ctx.beginPath();
             ctx.arc(PADDING + 80 * SCALE, y + ROW_H / 2, 22 * SCALE, 0, Math.PI * 2);
@@ -309,7 +321,10 @@ async function generateLeaderboardImage(members) {
 
             const members = (await Promise.all(rows.map(async (row) => {
                 try {
-                    const member = await interaction.guild.members.fetch(row.id);
+                    let member = interaction.guild.members.cache.get(row.id);
+                    if (!member) {
+                        member = await interaction.guild.members.fetch(row.id);
+                    }
                     if (member.user.bot) return null;
                     return {
                         ...row,
@@ -323,11 +338,15 @@ async function generateLeaderboardImage(members) {
 
             const buffer = await generateLeaderboardImage(members);
 
-            const userCrystals = getUser(interaction.user.id).crystals;
-            const userRankInTop = members.findIndex(m => m.id === interaction.user.id);
-            const userRank = userRankInTop >= 0 ? userRankInTop + 1 : getUserRank(interaction.user.id);
+            const [userData, totalUsersData, userRankData] = await Promise.all([
+                Promise.resolve(getUser(interaction.user.id)),
+                Promise.resolve(getTotalUsers()),
+                Promise.resolve(members.findIndex(m => m.id === interaction.user.id) >= 0 ? members.findIndex(m => m.id === interaction.user.id) + 1 : getUserRank(interaction.user.id))
+            ]);
+            const userCrystals = userData.crystals;
+            const userRank = userRankData;
             const rankText = userRank
-                ? `> Tu es top **${userRank}** sur **${getTotalUsers()}** joueurs avec **${formatNumber(userCrystals)}** CRYSTALs !`
+                ? `> Tu es top **${userRank}** sur **${totalUsersData}** joueurs avec **${formatNumber(userCrystals)}** CRYSTALs !`
                 : `> Tu n'as pas encore de CRYSTALs.`;
 
             const container = new ContainerBuilder()
@@ -399,9 +418,8 @@ const profilCommand = {
         }
 
         const user = getUser(userId);
-        const COOLDOWN = 86400000;
         const now = Date.now();
-        const nextMine = user.lastMineTime && (now - user.lastMineTime < COOLDOWN)
+        const nextMine = user.lastMineTime && (now - user.lastMineTime < COOLDOWN_24_HOURS)
             ? `<t:${Math.floor((user.lastMineTime + COOLDOWN) / 1000)}:R>`
             : '**Disponible maintenant !**';
 
@@ -451,11 +469,10 @@ const mine = {
     async execute(interaction) {
         const userId = interaction.user.id;
         const user = getUser(userId);
-        const COOLDOWN = 86400000;
         const now = Date.now();
 
-        if (now - (user.lastMineTime || 0) < COOLDOWN) {
-            const remainingMs = COOLDOWN - (now - user.lastMineTime);
+        if (now - (user.lastMineTime || 0) < COOLDOWN_24_HOURS) {
+            const remainingMs = COOLDOWN_24_HOURS - (now - user.lastMineTime);
             const remainingSec = Math.ceil(remainingMs / 1000);
             const hours = Math.floor(remainingSec / 3600);
             const minutes = Math.floor((remainingSec % 3600) / 60);
@@ -467,22 +484,22 @@ const mine = {
         }
 
         const lastMineTime = user.lastMineTime || 0;
-        // Fenêtre de 48h — évite de perdre sa série pour 2 minutes de décalage
         const hoursSinceLastMine = (now - lastMineTime) / 3600000;
 
         let streak = user.mineStreak || 0;
         if (lastMineTime === 0) {
-            streak = 1; // tout premier mine
-        } else if (hoursSinceLastMine <= 48) {
-            streak += 1; // dans la fenêtre — streak continue
+            streak = 1;
+        } else if (hoursSinceLastMine <= STREAK_WINDOW_HOURS) {
+            streak += 1;
         } else {
-            streak = 1; // plus de 48h — streak cassé
+            streak = 1;
         }
 
         const streakCapped = Math.min(streak, 5);
         const streakBonusPercentage = streakCapped * 5;
         const crystalsToAdd = getMineCrystals(streakCapped);
         const newCrystals = user.crystals + crystalsToAdd;
+        const newCrystalsToday = (user.crystalsToday || 0) + crystalsToAdd;
 
         const streakBonus = streakCapped > 0 ? ` (+${streakBonusPercentage}% de bonus streak)` : '';
         const description = `- Tu as miné **${formatNumber(crystalsToAdd)}** CRYSTALs !${streakBonus}\n- Tu as maintenant **${formatNumber(newCrystals)}** CRYSTALs.`;
@@ -508,7 +525,7 @@ const mine = {
                 new TextDisplayBuilder().setContent(`> **Prochain minage** : <t:${Math.floor((now + COOLDOWN) / 1000)}:R>`)
             );
 
-        updateCrystals(userId, newCrystals, user.crystalsToday);
+        updateCrystals(userId, newCrystals, newCrystalsToday);
         updateMineStreak(userId, now, streak);
 
         await interaction.reply({ flags: MessageFlags.IsComponentsV2, components: [container] });
@@ -517,7 +534,7 @@ const mine = {
 
 const paycrystal = {
     data: new SlashCommandBuilder()
-        .setName('pay_crystal')
+        .setName('donner_crystal')
         .setDescription('Envoyer des CRYSTALs à un autre joueur')
         .addUserOption(option =>
             option.setName('utilisateur')
@@ -542,20 +559,9 @@ const paycrystal = {
             return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu ne peux pas t\'envoyer des CRYSTALs à toi-même.', flags: MessageFlags.Ephemeral });
         }
 
-        const sender = getUser(senderId);
-        if (sender.crystals < amount) {
-            return interaction.reply({
-                content: `<a:51047animatedarrowwhite:1483033113134239827> Tu n'as que **${formatNumber(sender.crystals)}** CRYSTALs, tu ne peux pas en envoyer **${formatNumber(amount)}**.`,
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const recipientUser = getUser(recipient.id);
-        updateCrystals(senderId, sender.crystals - amount, sender.crystalsToday);
-        updateCrystals(recipient.id, recipientUser.crystals + amount, recipientUser.crystalsToday);
-
+        const result = transferCrystalsAtomic(senderId, recipient.id, amount);
         return interaction.reply({
-            content: `Tu as envoyé **${formatNumber(amount)}** CRYSTALs à <@${recipient.id}> <:dfgvdfgvxdfgvx10:1496538750308581559>`,
+            content: result.message,
             flags: MessageFlags.Ephemeral
         });
     }
@@ -662,7 +668,7 @@ const dropcrystal = {
         .addIntegerOption(option => option.setName('montant').setDescription('Nombre de CRYSTALs').setMinValue(1).setRequired(true))
         .addChannelOption(option => option.setName('salon').setDescription('Salon cible (optionnel)').setRequired(false)),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator')) {
+        if (!interaction.member.permissions.has('Administrator') || !interaction.member.id === '1102675129927991331') {
             return interaction.reply({ content: 'Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
@@ -693,7 +699,7 @@ const dropcrystal = {
                     )
             );
 
-        await channel.send({ flags: MessageFlags.IsComponentsV2, components: [container] });
+        await channel.send({ components: [container] });
         return interaction.reply({ content: `Drop de **${formatNumber(amount)}** CRYSTALs envoyé dans <#${channel.id}> !`, flags: MessageFlags.Ephemeral });
     }
 };
@@ -759,12 +765,15 @@ const trackereconomyCommand = {
             return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
-        const container = buildTrackerContainer(getTotalCrystals(), getTotalUsers(), getRichestUser(), interaction.user.id);
+        const [totalCrystals, totalUsers, richestUser] = await Promise.all([
+            Promise.resolve(getTotalCrystals()),
+            Promise.resolve(getTotalUsers()),
+            Promise.resolve(getRichestUser())
+        ]);
+        const container = buildTrackerContainer(totalCrystals, totalUsers, richestUser, interaction.user.id);
         await interaction.reply({ flags: MessageFlags.IsComponentsV2, components: [container] });
     }
 };
-
-// ─── Evenements ──────────────────────────────────────────────────
 
 client.once('ready', async () => {
     console.log('crystal connecté');
@@ -790,26 +799,34 @@ client.once('ready', async () => {
     console.log('Commandes slash enregistrées.');
 });
 
+const commandsMap = new Map([
+    ['profil', profilCommand],
+    ['add_crystal', addcrystal],
+    ['remove_crystal', removecrystal],
+    ['drop_crystal', dropcrystal],
+    ['pay_crystal', paycrystal],
+    ['reset_crystal', resetcrystal],
+    ['mine', mine],
+    ['ping', pingCommand],
+    ['botinfo', botinfoCommand],
+    ['tracker_economie', trackereconomyCommand],
+    ['help', helpCommand],
+    ['settings', settingsCommand],
+    ['top_crystals', leaderboardCommand],
+    ['suggestion', suggestionCommand],
+    ['report', reportCommand]
+]);
+
 client.on('interactionCreate', async interaction => {
     if (interaction.isChatInputCommand()) {
         try {
-            if (interaction.commandName === 'profil')          await profilCommand.execute(interaction);
-            if (interaction.commandName === 'add_crystal')     await addcrystal.execute(interaction);
-            if (interaction.commandName === 'remove_crystal')  await removecrystal.execute(interaction);
-            if (interaction.commandName === 'drop_crystal')    await dropcrystal.execute(interaction);
-            if (interaction.commandName === 'pay_crystal')     await paycrystal.execute(interaction);
-            if (interaction.commandName === 'reset_crystal')   await resetcrystal.execute(interaction);
-            if (interaction.commandName === 'mine')            await mine.execute(interaction);
-            if (interaction.commandName === 'ping')            await pingCommand.execute(interaction);
-            if (interaction.commandName === 'botinfo')         await botinfoCommand.execute(interaction);
-            if (interaction.commandName === 'tracker_economie') await trackereconomyCommand.execute(interaction);
-            if (interaction.commandName === 'help')            await helpCommand.execute(interaction);
-            if (interaction.commandName === 'settings')        await settingsCommand.execute(interaction);
-            if (interaction.commandName === 'top_crystals')     await leaderboardCommand.execute(interaction);
-            if (interaction.commandName === 'suggestion')         await suggestionCommand.execute(interaction);
-            if (interaction.commandName === 'report')      await reportCommand.execute(interaction);
-            
-
+            const command = commandsMap.get(interaction.commandName);
+            if (command) {
+                await command.execute(interaction);
+            } else {
+                console.warn(`Commande inconnue: ${interaction.commandName}`);
+                await interaction.reply({ content: 'Cette commande n\'existe pas.', flags: MessageFlags.Ephemeral });
+            }
         } catch (error) {
             console.error('Erreur lors de l\'exécution d\'une commande :', error);
             if (!interaction.replied) {
@@ -826,17 +843,13 @@ client.on('interactionCreate', async interaction => {
             const amount = parseInt(customId.split('_')[3]);
             const userId = interaction.user.id;
 
-            // Tentative de claim atomique — si quelqu'un a déjà cliqué, claimDrop retourne false
-            const success = claimDrop(customId, userId);
-            if (!success) {
+            const result = claimDropAndAwardCrystalsAtomic(customId, userId, amount);
+            if (!result.success) {
                 return interaction.reply({
-                    content: '<a:51047animatedarrowwhite:1483033113134239827> Trop tard, quelqu\'un a déjà récupéré ce drop !',
+                    content: result.message,
                     flags: MessageFlags.Ephemeral
                 });
             }
-
-            const user = getUser(userId);
-            updateCrystals(userId, user.crystals + amount, user.crystalsToday);
 
             const disabledContainer = new ContainerBuilder()
                 .setAccentColor(0x57F287)
@@ -853,7 +866,7 @@ client.on('interactionCreate', async interaction => {
                         )
                 );
 
-            await interaction.update({ flags: MessageFlags.IsComponentsV2, components: [disabledContainer] });
+            await interaction.update({ components: [disabledContainer] });
         }
 
         // ─── Tracker refresh ───
@@ -952,14 +965,14 @@ if (interaction.isModalSubmit()) {
 
     if (interaction.customId === 'suggestion_modal') {
         const suggestion = interaction.fields.getTextInputValue('suggestion_input').trim();
-        const mp = await client.users.fetch('1102675129927991331').catch(() => null);
+        const mp = await client.users.fetch(DEVELOPER_ID).catch(() => null);
         if (mp) await mp.send({ content: `Nouvelle suggestion de <@${interaction.user.id}> :\n\n\`\`\`${suggestion}\`\`\`` });
         await interaction.reply({ content: 'Merci pour ta suggestion !', flags: MessageFlags.Ephemeral });
     }
     
     if (interaction.customId === 'report_modal') {
         const report = interaction.fields.getTextInputValue('report_input').trim();
-        const mp = await client.users.fetch('1102675129927991331').catch(() => null);
+        const mp = await client.users.fetch(DEVELOPER_ID).catch(() => null);
         if (mp) await mp.send({ content: `Nouveau signalement de <@${interaction.user.id}> :\n\n\`\`\`${report}\`\`\`` });
         await interaction.reply({ content: 'Merci pour ton signalement !', flags: MessageFlags.Ephemeral });
     }
