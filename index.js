@@ -37,7 +37,6 @@ const crystalIcon = await loadImage(join(__dirname, 'assets', 'Crystals_logo_nob
 const COOLDOWN_24_HOURS = 86400000;
 const STREAK_WINDOW_HOURS = 48;
 const DEVELOPER_ID = process.env.DEVELOPER_ID || '1102675129927991331';
-const saloncomds
 
 dotenv.config();
 
