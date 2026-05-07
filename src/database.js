@@ -102,6 +102,14 @@ function transferCrystalsAtomic(senderId, recipientId, amount) {
         }
         // Prend 5% de la somme envoyée, LES TAXES BG
         const tax = Math.floor(amount * 0.05);
+        const limite = 5000; // Limite arbitraire pour éviter les abus
+        const cooldown = 1800000; // 30 minutes en millisecondes
+        if (amount > limite) {
+            return { success: false, message: `<a:51047animatedarrowwhite:1483033113134239827> Le montant maximum pour un transfert est de **${limite}** CRYSTALs.` };
+        }
+        if (Date.now() - (sender.lastMessageTime || 0) < cooldown) {
+            return { success: false, message: `<a:51047animatedarrowwhite:1483033113134239827> Tu dois attendre un peu avant de faire un autre transfert, reviens dans <t:${Math.floor((Date.now() - (sender.lastMessageTime || 0) + cooldown) / 1000)}:R>` };
+        }
         const recipientUser = getUser(recipientId);
         updateCrystals(senderId, sender.crystals - amount, sender.crystalsToday);
         updateCrystals(recipientId, recipientUser.crystals + amount - tax, recipientUser.crystalsToday);

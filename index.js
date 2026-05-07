@@ -37,6 +37,7 @@ const crystalIcon = await loadImage(join(__dirname, 'assets', 'Crystals_logo_nob
 const COOLDOWN_24_HOURS = 86400000;
 const STREAK_WINDOW_HOURS = 48;
 const DEVELOPER_ID = process.env.DEVELOPER_ID || '1102675129927991331';
+const version = '1.1.0';
 
 dotenv.config();
 
@@ -47,6 +48,8 @@ const client = new Client({
         GatewayIntentBits.MessageContent,
     ],
 });
+
+
 
 // ─── Commandes de bot générales ────────────────────────────────────────────────
 
@@ -105,7 +108,7 @@ const botinfoCommand = {
                 new TextDisplayBuilder().setContent(`> **ID** : ${client.user.id} <:dfgvdfgvxdfgvx8:1496538744527325440>`),
                 new TextDisplayBuilder().setContent(`> **Créateur** : Tortue Normande <@1482698332462776360> <:1483039713702055946:1483039713702055946>`),
                 new TextDisplayBuilder().setContent(`> **Langage de programmation** : JavaScript (discord.js) <:19915discordjs:1483039713702055946>`),
-                new TextDisplayBuilder().setContent(`> **Version** : 1.0.0 <:discotoolsxyzicon6:1496223667464442018>`)
+                new TextDisplayBuilder().setContent(`> **Version** : ${version} <:discotoolsxyzicon6:1496223667464442018>`)
             )
             .addMediaGalleryComponents(
                 new MediaGalleryBuilder().addItems(
@@ -134,22 +137,22 @@ const helpCommand = {
                 new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
             )
             .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('> **</profil>** [utilisateur] : Voir ton profil CRYSTAL'),
-                new TextDisplayBuilder().setContent('> **</mine>** : Miner des CRYSTALs, max 1 fois/24h'),
-                new TextDisplayBuilder().setContent('> **</pay_crystal>** [utilisateur] [montant] : Payer un autre joueur'),
-                new TextDisplayBuilder().setContent('> **</ping>** : Tester la latence du bot'),
-                new TextDisplayBuilder().setContent('> **</botinfo>** : Infos générales du bot'),
-                new TextDisplayBuilder().setContent('> **</help>** : Afficher ce menu'),
-                new TextDisplayBuilder().setContent('> **</top_crystals>** : Afficher le classement des utilisateurs les plus riches'),
-                new TextDisplayBuilder().setContent('> **</suggestion>** : Soumettre une suggestion pour améliorer le bot'),
-                new TextDisplayBuilder().setContent('> **</report>** : Signaler un bug ou un problème au créateur du bot')
+                new TextDisplayBuilder().setContent('> **</profil:1482698332462776360>** [utilisateur] : Voir ton profil CRYSTAL'),
+                new TextDisplayBuilder().setContent('> **</mine:1486446312709947464>** : Miner des CRYSTALs, max 1 fois/24h'),
+                new TextDisplayBuilder().setContent('> **</pay_crystal:1485964356687499346>** [utilisateur] [montant] : Payer un autre joueur'),
+                new TextDisplayBuilder().setContent('> **</ping:1486462852352053499>** : Tester la latence du bot'),
+                new TextDisplayBuilder().setContent('> **</botinfo:1486462852352053500>** : Infos générales du bot'),
+                new TextDisplayBuilder().setContent('> **</help:1486655907097215066>** : Afficher ce menu'),
+                new TextDisplayBuilder().setContent('> **</top_crystals:1487382097449586761>** : Afficher le classement des utilisateurs les plus riches'),
+                new TextDisplayBuilder().setContent('> **</suggestion:1487497763234250975>** : Soumettre une suggestion pour améliorer le bot'),
+                new TextDisplayBuilder().setContent('> **</report:1487499249913692352>** : Signaler un bug ou un problème au créateur du bot')
 
             )
             .addSeparatorComponents(
                 new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
             );
 
-        if (interaction.member.permissions.has('Administrator')) {
+        if (interaction.member.permissions.has('Administrator') || interaction.member.id === DEVELOPER_ID) {
             container.addTextDisplayComponents(
                 new TextDisplayBuilder().setContent('> **</add_crystal>** [utilisateur] [montant] : [ADMIN] Ajoute des CRYSTALs à un utilisateur.'),
                 new TextDisplayBuilder().setContent('> **</remove_crystal>** [utilisateur] [montant] : [ADMIN] Retire des CRYSTALs à un utilisateur.'),
@@ -595,7 +598,7 @@ const settingsCommand = {
         .setName('settings')
         .setDescription('[ADMIN] Gérer les paramètres du bot'),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator')) {
+        if (!interaction.member.permissions.has('Administrator') || interaction.member.id !== DEVELOPER_ID) {
             return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
@@ -618,7 +621,7 @@ const addcrystal = {
         .addUserOption(option => option.setName('utilisateur').setDescription('L\'utilisateur cible').setRequired(true))
         .addNumberOption(option => option.setName('montant').setDescription('Nombre de CRYSTALs à ajouter').setMinValue(1).setRequired(true)),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator')) {
+        if (!interaction.member.permissions.has('Administrator') || interaction.member.id !== DEVELOPER_ID) {
             return interaction.reply({ content: 'Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
@@ -641,7 +644,7 @@ const removecrystal = {
         .addUserOption(option => option.setName('utilisateur').setDescription('L\'utilisateur cible').setRequired(true))
         .addNumberOption(option => option.setName('montant').setDescription('Nombre de CRYSTALs à retirer').setMinValue(1).setRequired(true)),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator')) {
+        if (!interaction.member.permissions.has('Administrator') || interaction.member.id !== DEVELOPER_ID) {
             return interaction.reply({ content: 'Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
@@ -667,7 +670,7 @@ const dropcrystal = {
         .addIntegerOption(option => option.setName('montant').setDescription('Nombre de CRYSTALs').setMinValue(1).setRequired(true))
         .addChannelOption(option => option.setName('salon').setDescription('Salon cible (optionnel)').setRequired(false)),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator') || !interaction.member.id === '1102675129927991331') {
+        if (!interaction.member.permissions.has('Administrator') || interaction.member.id !== DEVELOPER_ID) {
             return interaction.reply({ content: 'Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
@@ -709,7 +712,7 @@ const resetcrystal = {
         .setDescription('[ADMIN] Réinitialiser les CRYSTALs d\'un joueur')
         .addUserOption(option => option.setName('utilisateur').setDescription('L\'utilisateur cible').setRequired(true)),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator')) {
+        if (!interaction.member.permissions.has('Administrator') || interaction.member.id !== DEVELOPER_ID) {
             return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
@@ -760,7 +763,7 @@ const trackereconomyCommand = {
         .setName('tracker_economie')
         .setDescription('Voir les stats économiques du serveur'),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator')) {
+        if (!interaction.member.permissions.has('Administrator') || interaction.member.id !== DEVELOPER_ID) {
             return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
