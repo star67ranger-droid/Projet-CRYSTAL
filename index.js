@@ -198,6 +198,7 @@ function createHelpContainer(category = 'accueil', interaction) {
             links: [
                 '> 🌐 **Empire Du 🌍** : [Rejoin nous](https://discord.gg/wTgUpmtK5A)',
                 '> 👨‍💻 **Créateur** : Tortue Normande',
+                '> 💽 **Hebergement** : [Héberger par NotFromServer](https://notfromservers.sumupstore.com)'
             ],
         },
         utilitaires: {
