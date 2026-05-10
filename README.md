@@ -19,4 +19,4 @@ Il contient un système d'économie originale et propre à l'empire.
 
 > *Par Tortue Normande*
 
-> *Héberger par NotFromParis.*
+> *Hébergé par NotFromParis.*
