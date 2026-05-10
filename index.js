@@ -39,6 +39,60 @@ const STREAK_WINDOW_HOURS = 48;
 const DEVELOPER_ID = process.env.DEVELOPER_ID || '1102675129927991331';
 const version = '1.1.0';
 
+// ─── Cooldown global et cache d'optimisation ───────────────────────────────────
+const GLOBAL_COMMAND_COOLDOWN = 1500; // 1.5 secondes
+let lastCommandTime = 0;
+
+// Cache utilisateur simple (TTL de 30 secondes)
+const userCache = new Map();
+const CACHE_TTL = 30000;
+
+function getCachedUser(userId) {
+    const cached = userCache.get(userId);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        return cached.user;
+    }
+    userCache.delete(userId);
+    return null;
+}
+
+function setCachedUser(userId, userData) {
+    userCache.set(userId, { user: userData, timestamp: Date.now() });
+    return userData;
+}
+
+function getUserOptimized(userId) {
+    const cached = getCachedUser(userId);
+    if (cached) return cached;
+    return setCachedUser(userId, getUser(userId));
+}
+
+// Cache pour les stats économiques (TTL de 10 secondes)
+let economyCache = null;
+let economyCacheTime = 0;
+const ECONOMY_CACHE_TTL = 10000;
+
+function getEconomyStats() {
+    const now = Date.now();
+    if (economyCache && (now - economyCacheTime) < ECONOMY_CACHE_TTL) {
+        return economyCache;
+    }
+    economyCache = {
+        total: getTotalCrystals(),
+        users: getTotalUsers(),
+        richest: getRichestUser()
+    };
+    economyCacheTime = now;
+    return economyCache;
+}
+
+// Wrapper pour updateCrystals qui invalide le cache
+function updateCrystalsOptimized(userId, crystals, crystalsToday) {
+    userCache.delete(userId); // Invalide le cache utilisateur
+    economyCache = null; // Invalide le cache économique
+    updateCrystals(userId, crystals, crystalsToday);
+}
+
 dotenv.config();
 
 const client = new Client({
@@ -341,7 +395,7 @@ async function generateLeaderboardImage(members) {
             const buffer = await generateLeaderboardImage(members);
 
             const [userData, totalUsersData, userRankData] = await Promise.all([
-                Promise.resolve(getUser(interaction.user.id)),
+                Promise.resolve(getUserOptimized(interaction.user.id)),
                 Promise.resolve(getTotalUsers()),
                 Promise.resolve(members.findIndex(m => m.id === interaction.user.id) >= 0 ? members.findIndex(m => m.id === interaction.user.id) + 1 : getUserRank(interaction.user.id))
             ]);
@@ -419,7 +473,7 @@ const profilCommand = {
             return interaction.reply({ flags: MessageFlags.IsComponentsV2, components: [container] });
         }
 
-        const user = getUser(userId);
+        const user = getUserOptimized(userId);
         const now = Date.now();
         const nextMine = user.lastMineTime && (now - user.lastMineTime < COOLDOWN_24_HOURS)
             ? `<t:${Math.floor((user.lastMineTime + COOLDOWN) / 1000)}:R>`
@@ -470,7 +524,7 @@ const mine = {
         .setDescription('Miner des CRYSTALs (1 fois par 24h, streak bonus)'),
     async execute(interaction) {
         const userId = interaction.user.id;
-        const user = getUser(userId);
+        const user = getUserOptimized(userId);
         const now = Date.now();
 
         if (now - (user.lastMineTime || 0) < COOLDOWN_24_HOURS) {
@@ -527,7 +581,7 @@ const mine = {
                 new TextDisplayBuilder().setContent(`> **Prochain minage** : <t:${Math.floor((now + COOLDOWN) / 1000)}:R>`)
             );
 
-        updateCrystals(userId, newCrystals, newCrystalsToday);
+        updateCrystalsOptimized(userId, newCrystals, newCrystalsToday);
         updateMineStreak(userId, now, streak);
 
         await interaction.reply({ flags: MessageFlags.IsComponentsV2, components: [container] });
@@ -630,8 +684,8 @@ const addcrystal = {
 
         if (targetUser.bot) return interaction.reply({ content: 'Tu ne peux pas ajouter des CRYSTALs à un bot.', flags: MessageFlags.Ephemeral });
 
-        const user = getUser(targetUser.id);
-        updateCrystals(targetUser.id, user.crystals + amount, user.crystalsToday);
+        const user = getUserOptimized(targetUser.id);
+        updateCrystalsOptimized(targetUser.id, user.crystals + amount, user.crystalsToday);
 
         return interaction.reply({ content: `Ajouté **${formatNumber(amount)}** CRYSTALs à <@${targetUser.id}> <:discotoolsxyzicon11:1496223660325736559>`, flags: MessageFlags.Ephemeral });
     }
@@ -653,12 +707,12 @@ const removecrystal = {
 
         if (targetUser.bot) return interaction.reply({ content: 'Tu ne peux pas retirer des CRYSTALs à un bot.', flags: MessageFlags.Ephemeral });
 
-        const user = getUser(targetUser.id);
+        const user = getUserOptimized(targetUser.id);
         if (user.crystals < amount) {
             return interaction.reply({ content: `<@${targetUser.id}> n'a que **${formatNumber(user.crystals)}** CRYSTALs.`, flags: MessageFlags.Ephemeral });
         }
 
-        updateCrystals(targetUser.id, user.crystals - amount, user.crystalsToday);
+        updateCrystalsOptimized(targetUser.id, user.crystals - amount, user.crystalsToday);
         return interaction.reply({ content: `Retiré **${formatNumber(amount)}** CRYSTALs à <@${targetUser.id}> <:discotoolsxyzicon12:1496223659029823709>`, flags: MessageFlags.Ephemeral });
     }
 };
@@ -719,7 +773,7 @@ const resetcrystal = {
         const targetUser = interaction.options.getUser('utilisateur');
         if (targetUser.bot) return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu ne peux pas réinitialiser un bot.', flags: MessageFlags.Ephemeral });
 
-        updateCrystals(targetUser.id, 0, 0);
+        updateCrystalsOptimized(targetUser.id, 0, 0);
         await interaction.channel.send(`<a:15770animatedarrowyellow:1483033107472056320> Les CRYSTALs de <@${targetUser.id}> ont été réinitialisés <:discotoolsxyzicon15:1496223652411080884>.`);
         return interaction.reply({ content: `<a:51047animatedarrowwhite:1483033113134239827> Les CRYSTALs de <@${targetUser.id}> ont été réinitialisés <:discotoolsxyzicon15:1496223652411080884>.`, flags: MessageFlags.Ephemeral });
     }
@@ -768,11 +822,11 @@ const trackereconomyCommand = {
         }
 
         const [totalCrystals, totalUsers, richestUser] = await Promise.all([
-            Promise.resolve(getTotalCrystals()),
             Promise.resolve(getTotalUsers()),
-            Promise.resolve(getRichestUser())
+            Promise.resolve(getTotalCrystals())
         ]);
-        const container = buildTrackerContainer(totalCrystals, totalUsers, richestUser, interaction.user.id);
+        const stats = getEconomyStats();
+        const container = buildTrackerContainer(stats.total, stats.users, stats.richest, interaction.user.id);
         await interaction.reply({ flags: MessageFlags.IsComponentsV2, components: [container] });
     }
 };
@@ -822,6 +876,20 @@ const commandsMap = new Map([
 client.on('interactionCreate', async interaction => {
     if (interaction.isChatInputCommand()) {
         try {
+            // ─── Vérifier cooldown global ───
+            const now = Date.now();
+            const timeSinceLastCommand = now - lastCommandTime;
+            
+            if (timeSinceLastCommand < GLOBAL_COMMAND_COOLDOWN) {
+                const remainingMs = GLOBAL_COMMAND_COOLDOWN - timeSinceLastCommand;
+                return interaction.reply({ 
+                    content: `<a:51047animatedarrowwhite:1483033113134239827> Le bot est en cooldown, réessaie dans **${Math.ceil(remainingMs / 100) / 10}s**.`, 
+                    flags: MessageFlags.Ephemeral 
+                });
+            }
+            
+            lastCommandTime = now;
+
             const command = commandsMap.get(interaction.commandName);
             if (command) {
                 await command.execute(interaction);
@@ -876,7 +944,8 @@ client.on('interactionCreate', async interaction => {
             if (!interaction.member.permissions.has('Administrator')) {
                 return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
             }
-            const updatedContainer = buildTrackerContainer(getTotalCrystals(), getTotalUsers(), getRichestUser(), interaction.user.id);
+            const stats = getEconomyStats();
+            const updatedContainer = buildTrackerContainer(stats.total, stats.users, stats.richest, interaction.user.id);
             return interaction.update({ flags: MessageFlags.IsComponentsV2, components: [updatedContainer] });
         }
 
