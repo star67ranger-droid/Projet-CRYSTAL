@@ -19,6 +19,9 @@ import {
     ActionRowBuilder,
     TextInputBuilder,
     TextInputStyle,
+    StringSelectMenuBuilder,
+    StringSelectMenuOptionBuilder,
+    PermissionFlagsBits,
 } from 'discord.js';
 import dotenv from 'dotenv';
 import { createCanvas, loadImage } from 'canvas';
@@ -177,52 +180,161 @@ const botinfoCommand = {
     }
 };
 
+
+// ─── Fonction d'aide avec menu ──────────────────────────────────────────────────
+
+function createHelpContainer(category = 'accueil', interaction) {
+    const member = interaction.member;
+
+    const categories = {
+        accueil: {
+            title: ' 🏠 Accueil ',
+            description: 'Bienvenue sur le panel d\'aide ! Utilisez le menu ci-dessous pour explorer les commandes disponibles.',
+            commands: [
+                `> 💎 **Type de bot** : Système d'économie Discord`,
+                `> 🤖 **Version** : ${version}`,
+                `> 👥 **Membres** : ${member.guild.memberCount}`,
+            ],
+            links: [
+                '> 🌐 **Empire Du 🌍** : [Rejoin nous](https://discord.gg/wTgUpmtK5A)',
+                '> 👨‍💻 **Créateur** : Tortue Normande',
+            ],
+        },
+        utilitaires: {
+            title: ' ✨ Commandes utilitaires ',
+            description: 'Commandes générales pour gérer tes CRYSTALs et afficher des informations.',
+            commands: [
+                '> **</profil:1482698332462776360>** [utilisateur] — Affiche ton profil CRYSTAL avec tes CRYSTALs',
+                '> **</mine:1486446312709947464>** — Miner des CRYSTALs (max 1 fois par 24h, bonus streak)',
+                '> **</donner_crystal:1485964356687499346>** [utilisateur] [montant] — Envoyer des CRYSTALs à un autre joueur',
+                '> **</top_crystals:1487382097449586761>** — Afficher le classement des joueurs les plus riches',
+                '> **</ping:1486462852352053499>** — Affiche la latence du bot et de l\'API Discord',
+                '> **</botinfo:1486462852352053500>** — Informations générales sur le bot',
+                '> **</help:1486655907097215066>** — Affiche ce menu d\'aide',
+            ],
+            permissions_requises: 'Aucune permission requise',
+        },
+        communaute: {
+            title: ' 💬 Commandes communauté ',
+            description: 'Commandes pour interagir avec les créateurs et améliorer le bot.',
+            commands: [
+                '> **</suggestion:1487497763234250975>** — Soumettre une suggestion pour améliorer le bot',
+                '> **</report:1487499249913692352>** — Signaler un bug ou un problème au développeur',
+                '> **</settings:1487497763234250975>** — Afficher les codes de récompense disponibles',
+            ],
+            permissions_requises: 'Aucune permission requise',
+        },
+        administration: {
+            title: ' ⚙️ Commandes d\'administration ',
+            description: '[Only admin] Commandes réservées aux administrateurs pour gérer l\'économie.',
+            commands: [
+                '> **</add_crystal:1498602191387230250>** [utilisateur] [montant] — Ajouter des CRYSTALs à un utilisateur',
+                '> **</remove_crystal:1498602191387230251>** [utilisateur] [montant] — Retirer des CRYSTALs à un utilisateur',
+                '> **</drop_crystal:1498602191387230252>** [montant] [salon] — Créer un drop de CRYSTALs (premier qui clique gagne)',
+                '> **</reset_crystal:1498602191387230253>** [utilisateur] — Réinitialiser les CRYSTALs d\'un joueur',
+                '> **</tracker_economie:1498602191387230254>** — Afficher les statistiques économiques du serveur',
+                '> **</settings:1498602191387230255>** — Gérer les codes de récompense (ajouter/supprimer)',
+            ],
+            permissions_requises: 'Administrator',
+        },
+    };
+
+    // Vérifier les permissions
+    if (category === 'administration' && !member.permissions.has(PermissionFlagsBits.Administrator) && member.id !== DEVELOPER_ID) {
+        category = 'accueil';
+    }
+
+    const data = categories[category] || categories.accueil;
+
+    // Créer les options du menu
+    const menuOptions = [
+        new StringSelectMenuOptionBuilder()
+            .setLabel('🏠 Accueil')
+            .setDescription('Informations générales et liens utiles')
+            .setValue('accueil'),
+        new StringSelectMenuOptionBuilder()
+            .setLabel('✨ Utilitaires')
+            .setDescription('Commandes pour gérer tes CRYSTALs')
+            .setValue('utilitaires'),
+        new StringSelectMenuOptionBuilder()
+            .setLabel('💬 Communauté')
+            .setDescription('Suggestions, signalements et codes')
+            .setValue('communaute'),
+    ];
+
+    // Ajouter l'option admin si l'utilisateur en a les permissions
+    if (member.permissions.has(PermissionFlagsBits.Administrator) || member.id === DEVELOPER_ID) {
+        menuOptions.push(
+            new StringSelectMenuOptionBuilder()
+                .setLabel('⚙️ Administration')
+                .setDescription('[Only admin] Commandes d\'administration')
+                .setValue('administration')
+        );
+    }
+
+    const helpMenuRow = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId('help_menu')
+            .setPlaceholder('📂 Choisissez une catégorie...')
+            .addOptions(menuOptions)
+    );
+
+    const permission = data.permissions_requises ? `\n**Permissions requises :** ${data.permissions_requises}` : '';
+    const description = data.description + permission;
+
+    const container = new ContainerBuilder()
+        .setAccentColor(0x57F287)
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(`## <a:51047animatedarrowwhite:1483033113134239827> ${data.title}`)
+        )
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(description)
+        )
+        .addSeparatorComponents(
+            new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
+        );
+
+    // Ajouter toutes les commandes
+    data.commands.forEach(cmd => {
+        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(cmd));
+    });
+
+    // Liens uniquement sur la page accueil
+    if (category === 'accueil' && data.links) {
+        container
+            .addSeparatorComponents(
+                new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
+            )
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent('**🌐 Liens utiles :**')
+            );
+        data.links.forEach(link => {
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(link));
+        });
+    }
+
+    container
+        .addSeparatorComponents(
+            new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
+        )
+        .addActionRowComponents(helpMenuRow);
+
+    return container;
+}
+
 const helpCommand = {
     data: new SlashCommandBuilder()
         .setName('help')
         .setDescription('Liste rapide des commandes'),
     async execute(interaction) {
-        const container = new ContainerBuilder()
-            .setAccentColor(0x57F287)
-            .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('## <a:51047animatedarrowwhite:1483033113134239827> Commandes disponibles <:discotoolsxyzicon9:1496223663895216138>')
-            )
-            .addSeparatorComponents(
-                new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
-            )
-            .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('> **</profil:1482698332462776360>** [utilisateur] : Voir ton profil CRYSTAL'),
-                new TextDisplayBuilder().setContent('> **</mine:1486446312709947464>** : Miner des CRYSTALs, max 1 fois/24h'),
-                new TextDisplayBuilder().setContent('> **</pay_crystal:1485964356687499346>** [utilisateur] [montant] : Payer un autre joueur'),
-                new TextDisplayBuilder().setContent('> **</ping:1486462852352053499>** : Tester la latence du bot'),
-                new TextDisplayBuilder().setContent('> **</botinfo:1486462852352053500>** : Infos générales du bot'),
-                new TextDisplayBuilder().setContent('> **</help:1486655907097215066>** : Afficher ce menu'),
-                new TextDisplayBuilder().setContent('> **</top_crystals:1487382097449586761>** : Afficher le classement des utilisateurs les plus riches'),
-                new TextDisplayBuilder().setContent('> **</suggestion:1487497763234250975>** : Soumettre une suggestion pour améliorer le bot'),
-                new TextDisplayBuilder().setContent('> **</report:1487499249913692352>** : Signaler un bug ou un problème au créateur du bot')
-
-            )
-            .addSeparatorComponents(
-                new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
-            );
-
-        if (interaction.member.permissions.has('Administrator') || interaction.member.id === DEVELOPER_ID) {
-            container.addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('> **</add_crystal>** [utilisateur] [montant] : [ADMIN] Ajoute des CRYSTALs à un utilisateur.'),
-                new TextDisplayBuilder().setContent('> **</remove_crystal>** [utilisateur] [montant] : [ADMIN] Retire des CRYSTALs à un utilisateur.'),
-                new TextDisplayBuilder().setContent('> **</drop_crystal>** [montant] [salon] : [ADMIN] Fait tomber des CRYSTALs, le premier qui clique les gagne.'),
-                new TextDisplayBuilder().setContent('> **</reset_crystal>** [utilisateur] : [ADMIN] Réinitialise les CRYSTALs d\'un utilisateur.'),
-                new TextDisplayBuilder().setContent('> **</tracker_economie>** : Affiche les statistiques économiques du serveur.'),
-                new TextDisplayBuilder().setContent('> **</settings>** : Gérer les paramètres du bot (codes de récompense, etc.)')
-            );
-        }
-
+        const container = createHelpContainer('accueil', interaction);
         await interaction.reply({
             flags: MessageFlags.IsComponentsV2,
             components: [container],
         });
     }
 };
+
 
 const suggestionCommand = {
     data: new SlashCommandBuilder()
@@ -1047,6 +1159,18 @@ if (interaction.isModalSubmit()) {
         if (mp) await mp.send({ content: `Nouveau signalement de <@${interaction.user.id}> :\n\n\`\`\`${report}\`\`\`` });
         await interaction.reply({ content: 'Merci pour ton signalement !', flags: MessageFlags.Ephemeral });
     }
+    }
+
+    // ─── StringSelectMenu Handler ───
+    if (interaction.isStringSelectMenu()) {
+        if (interaction.customId === 'help_menu') {
+            const selectedCategory = interaction.values?.[0] || 'accueil';
+            const container = createHelpContainer(selectedCategory, interaction);
+            await interaction.update({
+                flags: MessageFlags.IsComponentsV2,
+                components: [container],
+            });
+        }
     }
 });
 
