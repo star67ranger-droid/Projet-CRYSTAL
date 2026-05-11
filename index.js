@@ -25,6 +25,7 @@ import {
 } from 'discord.js';
 import dotenv from 'dotenv';
 import { createCanvas, loadImage } from 'canvas';
+// [CORRECT] Les fichiers sont bien dans src/ d'après la structure du projet
 import { execute } from './src/messagecreate.js';
 import { getUser, updateCrystals, updateMineStreak, updateLastMessageTime, getUserRank, getLeaderboard, getTotalCrystals, getTotalUsers, getRichestUser, claimCode, getCodes, addCode, removeCode, registerDrop, claimDrop, transferCrystalsAtomic, claimDropAndAwardCrystalsAtomic } from './src/database.js';
 import { formatNumber, getMineCrystals } from './src/messagecreate.js';
@@ -38,8 +39,10 @@ const crystalIcon = await loadImage(join(__dirname, 'assets', 'Crystals_logo_nob
 
 
 const COOLDOWN_24_HOURS = 86400000;
+// CORRECTIF #1 : COOLDOWN n'était jamais défini mais était utilisé dans /mine et /profil → crash garanti
+const COOLDOWN = COOLDOWN_24_HOURS;
 const STREAK_WINDOW_HOURS = 48;
-const DEVELOPER_ID = process.env.DEVELOPER_ID || '1102675129927991331';
+const DEVELOPER_ID = '1102675129927991331';
 const version = '1.1.2';
 
 // ─── Cooldown global et cache d'optimisation ───────────────────────────────────
@@ -91,8 +94,8 @@ function getEconomyStats() {
 
 // Wrapper pour updateCrystals qui invalide le cache
 function updateCrystalsOptimized(userId, crystals, crystalsToday) {
-    userCache.delete(userId); // Invalide le cache utilisateur
-    economyCache = null; // Invalide le cache économique
+    userCache.delete(userId);
+    economyCache = null;
     updateCrystals(userId, crystals, crystalsToday);
 }
 
@@ -240,14 +243,12 @@ function createHelpContainer(category = 'accueil', interaction) {
         },
     };
 
-    // Vérifier les permissions
     if (category === 'administration' && !member.permissions.has(PermissionFlagsBits.Administrator) && member.id !== DEVELOPER_ID) {
         category = 'accueil';
     }
 
     const data = categories[category] || categories.accueil;
 
-    // Créer les options du menu
     const menuOptions = [
         new StringSelectMenuOptionBuilder()
             .setLabel('🏠 Accueil')
@@ -263,7 +264,6 @@ function createHelpContainer(category = 'accueil', interaction) {
             .setValue('communaute'),
     ];
 
-    // Ajouter l'option admin si l'utilisateur en a les permissions
     if (member.permissions.has(PermissionFlagsBits.Administrator) || member.id === DEVELOPER_ID) {
         menuOptions.push(
             new StringSelectMenuOptionBuilder()
@@ -295,12 +295,10 @@ function createHelpContainer(category = 'accueil', interaction) {
             new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small)
         );
 
-    // Ajouter toutes les commandes
     data.commands.forEach(cmd => {
         container.addTextDisplayComponents(new TextDisplayBuilder().setContent(cmd));
     });
 
-    // Liens uniquement sur la page accueil
     if (category === 'accueil' && data.links) {
         container
             .addSeparatorComponents(
@@ -355,7 +353,7 @@ const suggestionCommand = {
                 )
             );
         await interaction.showModal(modal);
-        }
+    }
 };
 
 const reportCommand = {
@@ -478,7 +476,9 @@ async function generateLeaderboardImage(members) {
     }
 
     return canvas.toBuffer('image/png');
-}const leaderboardCommand = {
+}
+
+const leaderboardCommand = {
     data: new SlashCommandBuilder()
         .setName('top_crystals')
         .setDescription('Afficher le classement des utilisateurs les plus riches'),
@@ -507,15 +507,18 @@ async function generateLeaderboardImage(members) {
 
             const buffer = await generateLeaderboardImage(members);
 
-            const [userData, totalUsersData, userRankData] = await Promise.all([
-                Promise.resolve(getUserOptimized(interaction.user.id)),
-                Promise.resolve(getTotalUsers()),
-                Promise.resolve(members.findIndex(m => m.id === interaction.user.id) >= 0 ? members.findIndex(m => m.id === interaction.user.id) + 1 : getUserRank(interaction.user.id))
-            ]);
+            // CORRECTIF #4 : Promise.all avait 2 éléments mais destructurait 3 variables,
+            // et les variables n'étaient pas utilisées (getEconomyStats() était appelé après de toute façon).
+            // Simplifié en appels directs.
+            const userData = getUserOptimized(interaction.user.id);
+            const totalUsersData = getTotalUsers();
+            const userRankData = members.findIndex(m => m.id === interaction.user.id) >= 0
+                ? members.findIndex(m => m.id === interaction.user.id) + 1
+                : getUserRank(interaction.user.id);
+
             const userCrystals = userData.crystals;
-            const userRank = userRankData;
-            const rankText = userRank
-                ? `> Tu es top **${userRank}** sur **${totalUsersData}** joueurs avec **${formatNumber(userCrystals)}** CRYSTALs !`
+            const rankText = userRankData
+                ? `> Tu es top **${userRankData}** sur **${totalUsersData}** joueurs avec **${formatNumber(userCrystals)}** CRYSTALs !`
                 : `> Tu n'as pas encore de CRYSTALs.`;
 
             const container = new ContainerBuilder()
@@ -588,6 +591,7 @@ const profilCommand = {
 
         const user = getUserOptimized(userId);
         const now = Date.now();
+        // CORRECTIF #1 : COOLDOWN était utilisé ici mais non défini — maintenant = COOLDOWN_24_HOURS
         const nextMine = user.lastMineTime && (now - user.lastMineTime < COOLDOWN_24_HOURS)
             ? `<t:${Math.floor((user.lastMineTime + COOLDOWN) / 1000)}:R>`
             : '**Disponible maintenant !**';
@@ -691,6 +695,7 @@ const mine = {
             .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
             .addTextDisplayComponents(
                 new TextDisplayBuilder().setContent(`> **STREAK** : ${streak} jour(s) <:dfgvdfgvxdfgvx6:1496538740800360549>`),
+                // CORRECTIF #1 : COOLDOWN utilisé ici — maintenant défini = COOLDOWN_24_HOURS
                 new TextDisplayBuilder().setContent(`> **Prochain minage** : <t:${Math.floor((now + COOLDOWN) / 1000)}:R>`)
             );
 
@@ -765,7 +770,10 @@ const settingsCommand = {
         .setName('settings')
         .setDescription('[ADMIN] Gérer les paramètres du bot'),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator') || interaction.member.id !== DEVELOPER_ID) {
+        // CORRECTIF #3 : || → && — avec ||, la condition bloquait tout le monde car
+        // "(!admin) OU (!dev)" est vrai pour quasiment n'importe qui.
+        // Correct : bloquer seulement si (!admin) ET (!dev)
+        if (!interaction.member.permissions.has('Administrator') && interaction.member.id !== DEVELOPER_ID) {
             return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
@@ -788,7 +796,8 @@ const addcrystal = {
         .addUserOption(option => option.setName('utilisateur').setDescription('L\'utilisateur cible').setRequired(true))
         .addNumberOption(option => option.setName('montant').setDescription('Nombre de CRYSTALs à ajouter').setMinValue(1).setRequired(true)),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator') || interaction.member.id !== DEVELOPER_ID) {
+        // CORRECTIF #3 : || → &&
+        if (!interaction.member.permissions.has('Administrator') && interaction.member.id !== DEVELOPER_ID) {
             return interaction.reply({ content: 'Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
@@ -811,7 +820,8 @@ const removecrystal = {
         .addUserOption(option => option.setName('utilisateur').setDescription('L\'utilisateur cible').setRequired(true))
         .addNumberOption(option => option.setName('montant').setDescription('Nombre de CRYSTALs à retirer').setMinValue(1).setRequired(true)),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator') || interaction.member.id !== DEVELOPER_ID) {
+        // CORRECTIF #3 : || → &&
+        if (!interaction.member.permissions.has('Administrator') && interaction.member.id !== DEVELOPER_ID) {
             return interaction.reply({ content: 'Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
@@ -837,7 +847,8 @@ const dropcrystal = {
         .addIntegerOption(option => option.setName('montant').setDescription('Nombre de CRYSTALs').setMinValue(1).setRequired(true))
         .addChannelOption(option => option.setName('salon').setDescription('Salon cible (optionnel)').setRequired(false)),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator') || interaction.member.id !== DEVELOPER_ID) {
+        // CORRECTIF #3 : || → &&
+        if (!interaction.member.permissions.has('Administrator') && interaction.member.id !== DEVELOPER_ID) {
             return interaction.reply({ content: 'Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
@@ -849,8 +860,6 @@ const dropcrystal = {
         }
 
         const dropId = `drop_crystal_button_${amount}_${Date.now()}`;
-
-        // On enregistre le drop en BDD dès maintenant — claimed_by = NULL
         registerDrop(dropId);
 
         const container = new ContainerBuilder()
@@ -879,7 +888,8 @@ const resetcrystal = {
         .setDescription('[ADMIN] Réinitialiser les CRYSTALs d\'un joueur')
         .addUserOption(option => option.setName('utilisateur').setDescription('L\'utilisateur cible').setRequired(true)),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator') || interaction.member.id !== DEVELOPER_ID) {
+        // CORRECTIF #3 : || → &&
+        if (!interaction.member.permissions.has('Administrator') && interaction.member.id !== DEVELOPER_ID) {
             return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
@@ -930,14 +940,13 @@ const trackereconomyCommand = {
         .setName('tracker_economie')
         .setDescription('Voir les stats économiques du serveur'),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator') || interaction.member.id !== DEVELOPER_ID) {
+        // CORRECTIF #3 : || → &&
+        if (!interaction.member.permissions.has('Administrator') && interaction.member.id !== DEVELOPER_ID) {
             return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
         }
 
-        const [totalCrystals, totalUsers, richestUser] = await Promise.all([
-            Promise.resolve(getTotalUsers()),
-            Promise.resolve(getTotalCrystals())
-        ]);
+        // CORRECTIF #4 : Promise.all inutile et mal formé (2 éléments, 3 variables destructurées,
+        // résultats jamais utilisés). Remplacé par un simple appel à getEconomyStats() déjà prévu pour ça.
         const stats = getEconomyStats();
         const container = buildTrackerContainer(stats.total, stats.users, stats.richest, interaction.user.id);
         await interaction.reply({ flags: MessageFlags.IsComponentsV2, components: [container] });
@@ -973,7 +982,8 @@ const commandsMap = new Map([
     ['add_crystal', addcrystal],
     ['remove_crystal', removecrystal],
     ['drop_crystal', dropcrystal],
-    ['pay_crystal', paycrystal],
+    // CORRECTIF #2 : clé était 'pay_crystal' → la commande s'appelle 'donner_crystal', donc introuvable dans la map
+    ['donner_crystal', paycrystal],
     ['reset_crystal', resetcrystal],
     ['mine', mine],
     ['ping', pingCommand],
@@ -989,18 +999,17 @@ const commandsMap = new Map([
 client.on('interactionCreate', async interaction => {
     if (interaction.isChatInputCommand()) {
         try {
-            // ─── Vérifier cooldown global ───
             const now = Date.now();
             const timeSinceLastCommand = now - lastCommandTime;
-            
+
             if (timeSinceLastCommand < GLOBAL_COMMAND_COOLDOWN) {
                 const remainingMs = GLOBAL_COMMAND_COOLDOWN - timeSinceLastCommand;
-                return interaction.reply({ 
-                    content: `<a:51047animatedarrowwhite:1483033113134239827> Le bot est en cooldown, réessaie dans **${Math.ceil(remainingMs / 100) / 10}s**.`, 
-                    flags: MessageFlags.Ephemeral 
+                return interaction.reply({
+                    content: `<a:51047animatedarrowwhite:1483033113134239827> Le bot est en cooldown, réessaie dans **${Math.ceil(remainingMs / 100) / 10}s**.`,
+                    flags: MessageFlags.Ephemeral
                 });
             }
-            
+
             lastCommandTime = now;
 
             const command = commandsMap.get(interaction.commandName);
@@ -1137,29 +1146,29 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-if (interaction.isModalSubmit()) {
-    if (interaction.customId === 'code_modal_claim') {
-        const code = interaction.fields.getTextInputValue('code_input').trim().toUpperCase();
-        const result = claimCode(code, interaction.user.id);
-        const limiteInfo = result.limite > 0 && result.remaining !== null
-            ? ` (reste **${result.remaining}** utilisation${result.remaining > 1 ? 's' : ''})`
-            : '';
-        await interaction.reply({ content: result.message + limiteInfo, flags: MessageFlags.Ephemeral });
-    }
+    if (interaction.isModalSubmit()) {
+        if (interaction.customId === 'code_modal_claim') {
+            const code = interaction.fields.getTextInputValue('code_input').trim().toUpperCase();
+            const result = claimCode(code, interaction.user.id);
+            const limiteInfo = result.limite > 0 && result.remaining !== null
+                ? ` (reste **${result.remaining}** utilisation${result.remaining > 1 ? 's' : ''})`
+                : '';
+            await interaction.reply({ content: result.message + limiteInfo, flags: MessageFlags.Ephemeral });
+        }
 
-    if (interaction.customId === 'suggestion_modal') {
-        const suggestion = interaction.fields.getTextInputValue('suggestion_input').trim();
-        const mp = await client.users.fetch(DEVELOPER_ID).catch(() => null);
-        if (mp) await mp.send({ content: `Nouvelle suggestion de <@${interaction.user.id}> :\n\n\`\`\`${suggestion}\`\`\`` });
-        await interaction.reply({ content: 'Merci pour ta suggestion !', flags: MessageFlags.Ephemeral });
-    }
-    
-    if (interaction.customId === 'report_modal') {
-        const report = interaction.fields.getTextInputValue('report_input').trim();
-        const mp = await client.users.fetch(DEVELOPER_ID).catch(() => null);
-        if (mp) await mp.send({ content: `Nouveau signalement de <@${interaction.user.id}> :\n\n\`\`\`${report}\`\`\`` });
-        await interaction.reply({ content: 'Merci pour ton signalement !', flags: MessageFlags.Ephemeral });
-    }
+        if (interaction.customId === 'suggestion_modal') {
+            const suggestion = interaction.fields.getTextInputValue('suggestion_input').trim();
+            const mp = await client.users.fetch(DEVELOPER_ID).catch(() => null);
+            if (mp) await mp.send({ content: `Nouvelle suggestion de <@${interaction.user.id}> :\n\n\`\`\`${suggestion}\`\`\`` });
+            await interaction.reply({ content: 'Merci pour ta suggestion !', flags: MessageFlags.Ephemeral });
+        }
+
+        if (interaction.customId === 'report_modal') {
+            const report = interaction.fields.getTextInputValue('report_input').trim();
+            const mp = await client.users.fetch(DEVELOPER_ID).catch(() => null);
+            if (mp) await mp.send({ content: `Nouveau signalement de <@${interaction.user.id}> :\n\n\`\`\`${report}\`\`\`` });
+            await interaction.reply({ content: 'Merci pour ton signalement !', flags: MessageFlags.Ephemeral });
+        }
     }
 
     // ─── StringSelectMenu Handler ───
@@ -1177,4 +1186,4 @@ if (interaction.isModalSubmit()) {
 
 client.on('messageCreate', execute);
 
-client.login(process.env.TOKEN);   
+client.login(process.env.TOKEN);

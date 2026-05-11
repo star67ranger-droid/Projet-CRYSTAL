@@ -39,7 +39,7 @@ function migrateDatabase() {
         );
     `);
 
-    // Table de liaison user <-> code — remplace l'ancien CSV codes_redeemed
+    // Table de liaison user <-> code
     db.exec(`
         CREATE TABLE IF NOT EXISTS user_codes (
             user_id TEXT NOT NULL,
@@ -100,16 +100,25 @@ function transferCrystalsAtomic(senderId, recipientId, amount) {
         if (sender.crystals < amount) {
             return { success: false, message: `<a:51047animatedarrowwhite:1483033113134239827> Tu n'as que **${sender.crystals}** CRYSTALs, tu ne peux pas en envoyer **${amount}**.` };
         }
-        // Prend 5% de la somme envoyée, LES TAXES BG
+
+        // 5% de taxe sur la somme envoyée
         const tax = Math.floor(amount * 0.05);
-        const limite = 5000; // Limite arbitraire pour éviter les abus
-        const cooldown = 1800000; // 30 minutes en millisecondes
+        const limite = 5000;
+        const cooldown = 1800000; // 30 minutes
+
         if (amount > limite) {
             return { success: false, message: `<a:51047animatedarrowwhite:1483033113134239827> Le montant maximum pour un transfert est de **${limite}** CRYSTALs.` };
         }
+
         if (Date.now() - (sender.lastMessageTime || 0) < cooldown) {
-            return { success: false, message: `<a:51047animatedarrowwhite:1483033113134239827> Tu dois attendre un peu avant de faire un autre transfert, reviens dans <t:${Math.floor((Date.now() - (sender.lastMessageTime || 0) + cooldown) / 1000)}:R>` };
+            // CORRECTIF #5 : formule du timestamp incorrecte.
+            // Avant : (Date.now() - (sender.lastMessageTime || 0) + cooldown) / 1000
+            //   → donnait un temps relatif négatif ou erroné
+            // Après : ((sender.lastMessageTime || 0) + cooldown) / 1000
+            //   → donne le timestamp Unix correct de fin de cooldown
+            return { success: false, message: `<a:51047animatedarrowwhite:1483033113134239827> Tu dois attendre un peu avant de faire un autre transfert, reviens dans <t:${Math.floor(((sender.lastMessageTime || 0) + cooldown) / 1000)}:R>` };
         }
+
         const recipientUser = getUser(recipientId);
         updateCrystals(senderId, sender.crystals - amount, sender.crystalsToday);
         updateCrystals(recipientId, recipientUser.crystals + amount - tax, recipientUser.crystalsToday);
@@ -187,14 +196,12 @@ const claimDropStmt = db.prepare(
 );
 
 function registerDrop(dropId) {
-    // Enregistre le drop en BDD dès sa création
     insertDropStmt.run(dropId);
 }
 
 function claimDrop(dropId, userId) {
-    // Tente de claimer atomiquement — si claimed_by est déjà rempli, changes = 0
     const result = claimDropStmt.run(userId, dropId);
-    return result.changes > 0; // true = claim réussi, false = déjà pris
+    return result.changes > 0;
 }
 
 // ─── Codes ────────────────────────────────────────────────────────────────────
@@ -225,23 +232,18 @@ function removeCode(code) {
 function claimCode(code, userId) {
     const codeRow = db.prepare('SELECT * FROM codes WHERE code = ?').get(code);
 
-    // Code inexistant
     if (!codeRow) return { success: false, message: '<a:51047animatedarrowwhite:1483033113134239827> Code invalide.' };
 
-    // Limite atteinte
     if (codeRow.limite > 0 && codeRow.used_count >= codeRow.limite)
         return { success: false, message: '<a:51047animatedarrowwhite:1483033113134239827> Ce code a atteint sa limite d\'utilisation.' };
 
-    // INSERT OR IGNORE — si la paire (userId, code) existe déjà, changes = 0
     const result = db.prepare(
         'INSERT OR IGNORE INTO user_codes (user_id, code) VALUES (?, ?)'
     ).run(userId, code);
 
-    // Déjà utilisé par ce user
     if (result.changes === 0)
         return { success: false, message: '<a:51047animatedarrowwhite:1483033113134239827> Tu as déjà utilisé ce code.' };
 
-    // Tout bon — on crédite les crystals
     const user = getUser(userId);
     updateCrystals(userId, user.crystals + codeRow.reward, user.crystalsToday);
     db.prepare('UPDATE codes SET used_count = used_count + 1 WHERE code = ?').run(code);
