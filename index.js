@@ -43,7 +43,7 @@ const COOLDOWN_24_HOURS = 86400000;
 const COOLDOWN = COOLDOWN_24_HOURS;
 const STREAK_WINDOW_HOURS = 48;
 const DEVELOPER_ID = '1102675129927991331';
-const version = '1.1.2';
+const version = '1.2.2';
 
 // ─── Cooldown global et cache d'optimisation ───────────────────────────────────
 const GLOBAL_COMMAND_COOLDOWN = 1500; // 1.5 secondes
