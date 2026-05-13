@@ -166,7 +166,8 @@ const botinfoCommand = {
             .addTextDisplayComponents(
                 new TextDisplayBuilder().setContent(`> **Nom** : ${client.user.username} <:dfgvdfgvxdfgvx9:1496538747594870936>`),
                 new TextDisplayBuilder().setContent(`> **ID** : ${client.user.id} <:dfgvdfgvxdfgvx8:1496538744527325440>`),
-                new TextDisplayBuilder().setContent(`> **Créateur** : Tortue Normande <@1482698332462776360> <:1483039713702055946:1483039713702055946>`),
+                new TextDisplayBuilder().setContent(`> **Créateur** : Tortue Normande <:1483039713702055946:1483039713702055946>`),
+                new TextDisplayBuilder().setContent(`> **Hébergement** : [NotFromServer](https://notfromservers.sumupstore.com) <:dfgvdfgvxdfgvx10:1496538748729423360>`),
                 new TextDisplayBuilder().setContent(`> **Langage de programmation** : JavaScript (discord.js) <:19915discordjs:1483039713702055946>`),
                 new TextDisplayBuilder().setContent(`> **Version** : ${version} <:discotoolsxyzicon6:1496223667464442018>`)
             )
