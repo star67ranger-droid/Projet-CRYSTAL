@@ -56,6 +56,7 @@ function migrateDatabase() {
         lastMessageTime: 'INTEGER NOT NULL DEFAULT 0',
         lastMineTime:    'INTEGER NOT NULL DEFAULT 0',
         mineStreak:      'INTEGER NOT NULL DEFAULT 0',
+        lastTransferTime: 'INTEGER NOT NULL DEFAULT 0',
     };
     for (const [col, def] of Object.entries(requiredUserCols)) {
         if (!userCols.includes(col)) {
@@ -110,18 +111,19 @@ function transferCrystalsAtomic(senderId, recipientId, amount) {
             return { success: false, message: `<a:51047animatedarrowwhite:1483033113134239827> Le montant maximum pour un transfert est de **${limite}** CRYSTALs.` };
         }
 
-        if (Date.now() - (sender.lastMessageTime || 0) < cooldown) {
-            // CORRECTIF #5 : formule du timestamp incorrecte.
-            // Avant : (Date.now() - (sender.lastMessageTime || 0) + cooldown) / 1000
-            //   → donnait un temps relatif négatif ou erroné
-            // Après : ((sender.lastMessageTime || 0) + cooldown) / 1000
-            //   → donne le timestamp Unix correct de fin de cooldown
-            return { success: false, message: `<a:51047animatedarrowwhite:1483033113134239827> Tu dois attendre un peu avant de faire un autre transfert, reviens dans <t:${Math.floor(((sender.lastMessageTime || 0) + cooldown) / 1000)}:R>` };
+        // Vérifier le cooldown de transfert
+        if (Date.now() - (sender.lastTransferTime || 0) < cooldown) {
+            return { success: false, message: `<a:51047animatedarrowwhite:1483033113134239827> Tu dois attendre un peu avant de faire un autre transfert, reviens dans <t:${Math.floor(((sender.lastTransferTime || 0) + cooldown) / 1000)}:R>` };
         }
 
         const recipientUser = getUser(recipientId);
         updateCrystals(senderId, sender.crystals - amount, sender.crystalsToday);
         updateCrystals(recipientId, recipientUser.crystals + amount - tax, recipientUser.crystalsToday);
+        
+        // Mettre à jour le cooldown de transfert
+        const updateTransferTimeStmt = db.prepare('UPDATE users SET lastTransferTime = ? WHERE user_id = ?');
+        updateTransferTimeStmt.run(Date.now(), senderId);
+        
         return { success: true, message: `Tu as envoyé **${amount}** CRYSTALs à <@${recipientId}> <:dfgvdfgvxdfgvx10:1496538750308581559>` };
     })();
 }
@@ -167,7 +169,8 @@ const getRichestUserStmt = db.prepare(
     'SELECT user_id as id, crystals FROM users ORDER BY crystals DESC LIMIT 1'
 );
 function getRichestUser() {
-    return getRichestUserStmt.get() || { id: 'Unknown', crystals: 0 };
+    const result = getRichestUserStmt.get();
+    return result || { id: null, crystals: 0 };
 }
 
 const getLeaderboardStmt = db.prepare(
@@ -204,6 +207,29 @@ function claimDrop(dropId, userId) {
     return result.changes > 0;
 }
 
+// Fonction atomique pour ajouter des crystals
+function addCrystalsAtomic(userId, amount) {
+    return db.transaction(() => {
+        const user = getUser(userId);
+        const newCrystals = user.crystals + amount;
+        updateCrystals(userId, newCrystals, user.crystalsToday);
+        return { success: true, newCrystals };
+    })();
+}
+
+// Fonction atomique pour retirer des crystals
+function removeCrystalsAtomic(userId, amount) {
+    return db.transaction(() => {
+        const user = getUser(userId);
+        if (user.crystals < amount) {
+            return { success: false, newCrystals: user.crystals };
+        }
+        const newCrystals = user.crystals - amount;
+        updateCrystals(userId, newCrystals, user.crystalsToday);
+        return { success: true, newCrystals };
+    })();
+}
+
 // ─── Codes ────────────────────────────────────────────────────────────────────
 
 function getCodes() {
@@ -211,6 +237,17 @@ function getCodes() {
 }
 
 function addCode(code, reward = 100, limite = 0) {
+    // Validation des paramètres
+    if (!code || code.trim() === '') {
+        return { success: false, message: '<a:51047animatedarrowwhite:1483033113134239827> Le code ne peut pas être vide.' };
+    }
+    if (reward <= 0) {
+        return { success: false, message: '<a:51047animatedarrowwhite:1483033113134239827> La récompense doit être supérieure à 0.' };
+    }
+    if (limite < 0) {
+        return { success: false, message: '<a:51047animatedarrowwhite:1483033113134239827> La limite ne peut pas être négative.' };
+    }
+    
     const exists = db.prepare('SELECT code FROM codes WHERE code = ?').get(code);
     if (exists) return { success: false, message: '<a:51047animatedarrowwhite:1483033113134239827> Ce code existe déjà.' };
     db.prepare(
@@ -232,17 +269,35 @@ function removeCode(code) {
 function claimCode(code, userId) {
     const codeRow = db.prepare('SELECT * FROM codes WHERE code = ?').get(code);
 
-    if (!codeRow) return { success: false, message: '<a:51047animatedarrowwhite:1483033113134239827> Code invalide.' };
+    if (!codeRow) return { 
+        success: false, 
+        message: '<a:51047animatedarrowwhite:1483033113134239827> Code invalide.',
+        reward: 0,
+        limite: 0,
+        remaining: null
+    };
 
     if (codeRow.limite > 0 && codeRow.used_count >= codeRow.limite)
-        return { success: false, message: '<a:51047animatedarrowwhite:1483033113134239827> Ce code a atteint sa limite d\'utilisation.' };
+        return { 
+            success: false, 
+            message: '<a:51047animatedarrowwhite:1483033113134239827> Ce code a atteint sa limite d\'utilisation.',
+            reward: codeRow.reward,
+            limite: codeRow.limite,
+            remaining: 0
+        };
 
     const result = db.prepare(
         'INSERT OR IGNORE INTO user_codes (user_id, code) VALUES (?, ?)'
     ).run(userId, code);
 
     if (result.changes === 0)
-        return { success: false, message: '<a:51047animatedarrowwhite:1483033113134239827> Tu as déjà utilisé ce code.' };
+        return { 
+            success: false, 
+            message: '<a:51047animatedarrowwhite:1483033113134239827> Tu as déjà utilisé ce code.',
+            reward: codeRow.reward,
+            limite: codeRow.limite,
+            remaining: null
+        };
 
     const user = getUser(userId);
     updateCrystals(userId, user.crystals + codeRow.reward, user.crystalsToday);
@@ -279,4 +334,6 @@ export {
     claimDrop,
     transferCrystalsAtomic,
     claimDropAndAwardCrystalsAtomic,
+    addCrystalsAtomic,
+    removeCrystalsAtomic,
 };

@@ -27,7 +27,7 @@ import dotenv from 'dotenv';
 import { createCanvas, loadImage } from 'canvas';
 // [CORRECT] Les fichiers sont bien dans src/ d'après la structure du projet
 import { execute } from './src/messagecreate.js';
-import { getUser, updateCrystals, updateMineStreak, updateLastMessageTime, getUserRank, getLeaderboard, getTotalCrystals, getTotalUsers, getRichestUser, claimCode, getCodes, addCode, removeCode, registerDrop, claimDrop, transferCrystalsAtomic, claimDropAndAwardCrystalsAtomic } from './src/database.js';
+import { getUser, updateCrystals, updateMineStreak, updateLastMessageTime, getUserRank, getLeaderboard, getTotalCrystals, getTotalUsers, getRichestUser, claimCode, getCodes, addCode, removeCode, registerDrop, claimDrop, transferCrystalsAtomic, claimDropAndAwardCrystalsAtomic, addCrystalsAtomic, removeCrystalsAtomic } from './src/database.js';
 import { formatNumber, getMineCrystals } from './src/messagecreate.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -43,15 +43,15 @@ const COOLDOWN_24_HOURS = 86400000;
 const COOLDOWN = COOLDOWN_24_HOURS;
 const STREAK_WINDOW_HOURS = 48;
 const DEVELOPER_ID = '1102675129927991331';
-const version = '1.2.2';
+const version = '1.2.3';
 
 // ─── Cooldown global et cache d'optimisation ───────────────────────────────────
-const GLOBAL_COMMAND_COOLDOWN = 1500; // 1.5 secondes
-let lastCommandTime = 0;
+const GLOBAL_COMMAND_COOLDOWN = 1500; // 1.5 secondes par utilisateur
+const userCommandCooldowns = new Map(); // Cooldown par utilisateur
 
-// Cache utilisateur simple (TTL de 30 secondes)
+// Cache utilisateur simple (TTL de 5 minutes pour moins de load BD)
 const userCache = new Map();
-const CACHE_TTL = 30000;
+const CACHE_TTL = 300000;
 
 function getCachedUser(userId) {
     const cached = userCache.get(userId);
@@ -72,6 +72,9 @@ function getUserOptimized(userId) {
     if (cached) return cached;
     return setCachedUser(userId, getUser(userId));
 }
+
+// Cooldown transfert : stocké par utilisateur pour 30 minutes
+const transferCooldowns = new Map();
 
 // Cache pour les stats économiques (TTL de 10 secondes)
 let economyCache = null;
@@ -98,6 +101,22 @@ function updateCrystalsOptimized(userId, crystals, crystalsToday) {
     economyCache = null;
     updateCrystals(userId, crystals, crystalsToday);
 }
+
+// Config du bot (métadonnées)
+const BOT_CONFIG = {
+    activityTexts: [
+        '/help | /suggestion',
+        '.gg/empire-production',
+        'Hébergé par NotFromServer',
+        'Créé par PIKEO',
+    ],
+    guildLink: 'https://discord.gg/wTgUpmtK5A',
+    creatorLink: 'https://portfolio-pikeo.vercel.app',
+    hostingLink: 'https://notfromservers.sumupstore.com',
+    accentColor: 0x57F287
+};
+
+let currentActivityIndex = 0;
 
 dotenv.config();
 
@@ -165,8 +184,8 @@ const botinfoCommand = {
             )
             .addTextDisplayComponents(
                 new TextDisplayBuilder().setContent(`> **Nom** : ${client.user.username} <:dfgvdfgvxdfgvx9:1496538747594870936>`),
-                new TextDisplayBuilder().setContent(`> **ID** : ${client.user.id} <:dfgvdfgvxdfgvx8:1496538744527325440>`),
-                new TextDisplayBuilder().setContent(`> **Créateur** : Tortue Normande <:1483039713702055946:1483039713702055946>`),
+                new TextDisplayBuilder().setContent(`> **ID** : ${client.user.id} <:discotoolsxyzicon15:1496223652411080884>`),
+                new TextDisplayBuilder().setContent(`> **Créateur** : Tortue Normande <:discotoolsxyzicon19:1496223644911931563>`),
                 new TextDisplayBuilder().setContent(`> **Hébergement** : [NotFromServer](https://notfromservers.sumupstore.com) <:dfgvdfgvxdfgvx10:1496538748729423360>`),
                 new TextDisplayBuilder().setContent(`> **Langage de programmation** : JavaScript (discord.js) <:19915discordjs:1483039713702055946>`),
                 new TextDisplayBuilder().setContent(`> **Version** : ${version} <:discotoolsxyzicon6:1496223667464442018>`)
@@ -195,14 +214,14 @@ function createHelpContainer(category = 'accueil', interaction) {
             title: ' 🏠 Accueil ',
             description: 'Bienvenue sur le panel d\'aide ! Utilisez le menu ci-dessous pour explorer les commandes disponibles.',
             commands: [
-                `> 💎 **Type de bot** : Système d'économie Discord`,
-                `> 🤖 **Version** : ${version}`,
-                `> 👥 **Membres** : ${member.guild.memberCount}`,
+                `> 💎 ・**Type de bot** : Système d'économie Discord`,
+                `> 🤖 ・**Version** : ${version}`,
+                `> 👥 ・**Membres** : ${member.guild.memberCount}`,
             ],
             links: [
-                '> 🌐 **Empire Du 🌍** : [Rejoin nous](https://discord.gg/wTgUpmtK5A)',
-                '> 👨‍💻 **Créateur** : Tortue Normande',
-                '> 💽 **Hebergement** : [Héberger par NotFromServer](https://notfromservers.sumupstore.com)'
+                '> 🌐 ・**Empire Du 🌍** : [Rejoin nous](https://discord.gg/wTgUpmtK5A)',
+                '> 👨‍💻 ・**Créateur** : [Tortue Normande](https://portfolio-pikeo.vercel.app)',
+                '> 💽 ・**Hébergement** : [Héberger par NotFromServer](https://notfromservers.sumupstore.com)'
             ],
         },
         utilitaires: {
@@ -513,12 +532,18 @@ const leaderboardCommand = {
             // Simplifié en appels directs.
             const userData = getUserOptimized(interaction.user.id);
             const totalUsersData = getTotalUsers();
-            const userRankData = members.findIndex(m => m.id === interaction.user.id) >= 0
-                ? members.findIndex(m => m.id === interaction.user.id) + 1
+            const userIndexInLeaderboard = members.findIndex(m => m.id === interaction.user.id);
+            let userRankData = userIndexInLeaderboard >= 0
+                ? userIndexInLeaderboard + 1
                 : getUserRank(interaction.user.id);
+            
+            // Si getUserRank retourne null, utiliser totalUsersData + 1
+            if (userRankData === null) {
+                userRankData = totalUsersData + 1;
+            }
 
             const userCrystals = userData.crystals;
-            const rankText = userRankData
+            const rankText = userCrystals > 0
                 ? `> Tu es top **${userRankData}** sur **${totalUsersData}** joueurs avec **${formatNumber(userCrystals)}** CRYSTALs !`
                 : `> Tu n'as pas encore de CRYSTALs.`;
 
@@ -675,7 +700,7 @@ const mine = {
         const newCrystals = user.crystals + crystalsToAdd;
         const newCrystalsToday = (user.crystalsToday || 0) + crystalsToAdd;
 
-        const streakBonus = streakCapped > 0 ? ` (+${streakBonusPercentage}% de bonus streak)` : '';
+        const streakBonus = streakCapped > 0 ? ` (+${streakCapped * 5}% de bonus streak)` : '';
         const description = `- Tu as miné **${formatNumber(crystalsToAdd)}** CRYSTALs !${streakBonus}\n- Tu as maintenant **${formatNumber(newCrystals)}** CRYSTALs.`;
 
         const container = new ContainerBuilder()
@@ -695,9 +720,8 @@ const mine = {
             )
             .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
             .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(`> **STREAK** : ${streak} jour(s) <:dfgvdfgvxdfgvx6:1496538740800360549>`),
-                // CORRECTIF #1 : COOLDOWN utilisé ici — maintenant défini = COOLDOWN_24_HOURS
-                new TextDisplayBuilder().setContent(`> **Prochain minage** : <t:${Math.floor((now + COOLDOWN) / 1000)}:R>`)
+                new TextDisplayBuilder().setContent(`> **STREAK** : ${streakCapped} jour(s) (max 5) <:dfgvdfgvxdfgvx6:1496538740800360549>`),
+                new TextDisplayBuilder().setContent(`> **Prochain minage** : <t:${Math.floor((now + COOLDOWN_24_HOURS) / 1000)}:R>`)
             );
 
         updateCrystalsOptimized(userId, newCrystals, newCrystalsToday);
@@ -732,6 +756,9 @@ const paycrystal = {
         }
         if (recipient.id === senderId) {
             return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu ne peux pas t\'envoyer des CRYSTALs à toi-même.', flags: MessageFlags.Ephemeral });
+        }
+        if (amount <= 0) {
+            return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Le montant doit être supérieur à 0.', flags: MessageFlags.Ephemeral });
         }
 
         const result = transferCrystalsAtomic(senderId, recipient.id, amount);
@@ -806,10 +833,9 @@ const addcrystal = {
         const amount = Math.floor(interaction.options.getNumber('montant'));
 
         if (targetUser.bot) return interaction.reply({ content: 'Tu ne peux pas ajouter des CRYSTALs à un bot.', flags: MessageFlags.Ephemeral });
+        if (amount <= 0) return interaction.reply({ content: 'Le montant doit être supérieur à 0.', flags: MessageFlags.Ephemeral });
 
-        const user = getUserOptimized(targetUser.id);
-        updateCrystalsOptimized(targetUser.id, user.crystals + amount, user.crystalsToday);
-
+        const result = addCrystalsAtomic(targetUser.id, amount);
         return interaction.reply({ content: `Ajouté **${formatNumber(amount)}** CRYSTALs à <@${targetUser.id}> <:discotoolsxyzicon11:1496223660325736559>`, flags: MessageFlags.Ephemeral });
     }
 };
@@ -830,13 +856,12 @@ const removecrystal = {
         const amount = Math.floor(interaction.options.getNumber('montant'));
 
         if (targetUser.bot) return interaction.reply({ content: 'Tu ne peux pas retirer des CRYSTALs à un bot.', flags: MessageFlags.Ephemeral });
+        if (amount <= 0) return interaction.reply({ content: 'Le montant doit être supérieur à 0.', flags: MessageFlags.Ephemeral });
 
-        const user = getUserOptimized(targetUser.id);
-        if (user.crystals < amount) {
-            return interaction.reply({ content: `<@${targetUser.id}> n'a que **${formatNumber(user.crystals)}** CRYSTALs.`, flags: MessageFlags.Ephemeral });
+        const result = removeCrystalsAtomic(targetUser.id, amount);
+        if (!result.success) {
+            return interaction.reply({ content: `<@${targetUser.id}> n'a que **${formatNumber(result.newCrystals)}** CRYSTALs.`, flags: MessageFlags.Ephemeral });
         }
-
-        updateCrystalsOptimized(targetUser.id, user.crystals - amount, user.crystalsToday);
         return interaction.reply({ content: `Retiré **${formatNumber(amount)}** CRYSTALs à <@${targetUser.id}> <:discotoolsxyzicon12:1496223659029823709>`, flags: MessageFlags.Ephemeral });
     }
 };
@@ -860,11 +885,21 @@ const dropcrystal = {
             return interaction.reply({ content: 'Le salon doit être un salon textuel.', flags: MessageFlags.Ephemeral });
         }
 
-        const dropId = `drop_crystal_button_${amount}_${Date.now()}`;
-        registerDrop(dropId);
+        // Vérifier que le bot peut envoyer des messages dans le canal
+        if (!channel.permissionsFor(client.user).has('SendMessages')) {
+            return interaction.reply({ content: 'Je n\'ai pas la permission d\'envoyer des messages dans ce salon.', flags: MessageFlags.Ephemeral });
+        }
+
+        const dropId = `drop_crystal_button_${amount}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        try {
+            registerDrop(dropId);
+        } catch (error) {
+            console.error('Erreur lors de l\'enregistrement du drop:', error);
+            return interaction.reply({ content: 'Erreur lors de la création du drop.', flags: MessageFlags.Ephemeral });
+        }
 
         const container = new ContainerBuilder()
-            .setAccentColor(0x57F287)
+            .setAccentColor(BOT_CONFIG.accentColor)
             .addTextDisplayComponents(new TextDisplayBuilder().setContent('## <:discotoolsxyzicon16:1496223650490089754> CRYSTALS DROP'))
             .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
             .addSectionComponents(
@@ -878,7 +913,12 @@ const dropcrystal = {
                     )
             );
 
-        await channel.send({ components: [container] });
+        try {
+            await channel.send({ components: [container] });
+        } catch (error) {
+            console.error('Erreur lors de l\'envoi du message du drop:', error);
+            return interaction.reply({ content: 'Erreur lors de l\'envoi du drop dans le salon.', flags: MessageFlags.Ephemeral });
+        }
         return interaction.reply({ content: `Drop de **${formatNumber(amount)}** CRYSTALs envoyé dans <#${channel.id}> !`, flags: MessageFlags.Ephemeral });
     }
 };
@@ -898,16 +938,22 @@ const resetcrystal = {
         if (targetUser.bot) return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu ne peux pas réinitialiser un bot.', flags: MessageFlags.Ephemeral });
 
         updateCrystalsOptimized(targetUser.id, 0, 0);
-        await interaction.channel.send(`<a:15770animatedarrowyellow:1483033107472056320> Les CRYSTALs de <@${targetUser.id}> ont été réinitialisés <:discotoolsxyzicon15:1496223652411080884>.`);
-        return interaction.reply({ content: `<a:51047animatedarrowwhite:1483033113134239827> Les CRYSTALs de <@${targetUser.id}> ont été réinitialisés <:discotoolsxyzicon15:1496223652411080884>.`, flags: MessageFlags.Ephemeral });
+        const resetMsg = `<a:15770animatedarrowyellow:1483033107472056320> Les CRYSTALs de <@${targetUser.id}> ont été réinitialisés <:discotoolsxyzicon15:1496223652411080884>.`;
+        await interaction.channel.send(resetMsg);
+        return interaction.reply({ content: resetMsg, flags: MessageFlags.Ephemeral });
     }
 };
 
 function buildTrackerContainer(totalCrystals, totalUsers, richestUser, interactionUserId) {
     const averageCrystals = totalUsers > 0 ? Math.floor(totalCrystals / totalUsers) : 0;
+    
+    // Gestion du cas où il n'y a aucun utilisateur
+    const richestUserDisplay = richestUser && richestUser.id 
+        ? `<@${richestUser.id}> avec **${formatNumber(richestUser.crystals)}** CRYSTALs`
+        : 'Aucun utilisateur';
 
     return new ContainerBuilder()
-        .setAccentColor(0x57F287)
+        .setAccentColor(BOT_CONFIG.accentColor)
         .addTextDisplayComponents(
             new TextDisplayBuilder().setContent('## <:discotoolsxyzicon20:1496223642173047057> Statistiques économiques du serveur')
         )
@@ -920,7 +966,7 @@ function buildTrackerContainer(totalCrystals, totalUsers, richestUser, interacti
         .addSectionComponents(
             new SectionBuilder()
                 .addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(`> **Utilisateur le plus riche** : <@${richestUser.id}> avec **${formatNumber(richestUser.crystals)}** CRYSTALs`),
+                    new TextDisplayBuilder().setContent(`> **Utilisateur le plus riche** : ${richestUserDisplay}`),
                 )
                 .setButtonAccessory(
                     new ButtonBuilder()
@@ -973,7 +1019,20 @@ client.once('ready', async () => {
         suggestionCommand.data.toJSON(),
         reportCommand.data.toJSON()
     ];
-    client.user.setActivity('/help | /suggestion', { type: ActivityType.Watching });
+    
+    // Fonction pour changer le statut
+    function rotateActivity() {
+        const activity = BOT_CONFIG.activityTexts[currentActivityIndex];
+        client.user.setActivity(activity, { type: ActivityType.Watching });
+        currentActivityIndex = (currentActivityIndex + 1) % BOT_CONFIG.activityTexts.length;
+    }
+    
+    // Changer l'activité immédiatement
+    rotateActivity();
+    
+    // Changer l'activité toutes les 60 secondes
+    setInterval(rotateActivity, 60000);
+    
     await client.application.commands.set(commands);
     console.log('Commandes slash enregistrées.');
 });
@@ -1001,17 +1060,19 @@ client.on('interactionCreate', async interaction => {
     if (interaction.isChatInputCommand()) {
         try {
             const now = Date.now();
-            const timeSinceLastCommand = now - lastCommandTime;
+            const userId = interaction.user.id;
+            const lastCommandUserTime = userCommandCooldowns.get(userId) || 0;
+            const timeSinceLastCommand = now - lastCommandUserTime;
 
             if (timeSinceLastCommand < GLOBAL_COMMAND_COOLDOWN) {
                 const remainingMs = GLOBAL_COMMAND_COOLDOWN - timeSinceLastCommand;
                 return interaction.reply({
-                    content: `<a:51047animatedarrowwhite:1483033113134239827> Le bot est en cooldown, réessaie dans **${Math.ceil(remainingMs / 100) / 10}s**.`,
+                    content: `<a:51047animatedarrowwhite:1483033113134239827> Tu dois attendre **${Math.ceil(remainingMs / 100) / 10}s** avant de relancer une commande.`,
                     flags: MessageFlags.Ephemeral
                 });
             }
 
-            lastCommandTime = now;
+            userCommandCooldowns.set(userId, now);
 
             const command = commandsMap.get(interaction.commandName);
             if (command) {
@@ -1033,7 +1094,8 @@ client.on('interactionCreate', async interaction => {
 
         // ─── Drop crystal ───
         if (customId.startsWith('drop_crystal_button_')) {
-            const amount = parseInt(customId.split('_')[3]);
+            const parts = customId.split('_');
+            const amount = parseInt(parts[3]);
             const userId = interaction.user.id;
 
             const result = claimDropAndAwardCrystalsAtomic(customId, userId, amount);
@@ -1059,12 +1121,19 @@ client.on('interactionCreate', async interaction => {
                         )
                 );
 
-            await interaction.update({ components: [disabledContainer] });
+            try {
+                await interaction.update({ components: [disabledContainer] });
+            } catch (error) {
+                console.error('Erreur lors de la mise à jour du message du drop:', error);
+                if (!interaction.replied) {
+                    await interaction.reply({ content: result.message + ' (mais une erreur est survenue lors de la mise à jour).', flags: MessageFlags.Ephemeral });
+                }
+            }
         }
 
         // ─── Tracker refresh ───
         if (customId === 'tracker_economie_refresh') {
-            if (!interaction.member.permissions.has('Administrator')) {
+            if (!interaction.member.permissions.has('Administrator') && interaction.member.id !== DEVELOPER_ID) {
                 return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
             }
             const stats = getEconomyStats();
@@ -1074,7 +1143,7 @@ client.on('interactionCreate', async interaction => {
 
         // ─── Add / remove code (admin) ───
         if (customId === 'add_code' || customId === 'remove_code') {
-            if (!interaction.member.permissions.has('Administrator')) {
+            if (!interaction.member.permissions.has('Administrator') && interaction.member.id !== DEVELOPER_ID) {
                 return interaction.reply({ content: '<a:51047animatedarrowwhite:1483033113134239827> Tu n\'as pas la permission.', flags: MessageFlags.Ephemeral });
             }
 
@@ -1084,24 +1153,41 @@ client.on('interactionCreate', async interaction => {
                 .setTitle(isAdd ? 'Ajouter un code <:discotoolsxyzicon11:1496223660325736559>' : 'Supprimer un code <:discotoolsxyzicon12:1496223659029823709>')
                 .addComponents(
                     new ActionRowBuilder().addComponents(
-                        new TextInputBuilder().setCustomId('code_input').setLabel('Code').setStyle(TextInputStyle.Short).setRequired(true)
+                        new TextInputBuilder()
+                            .setCustomId('code_input')
+                            .setLabel('Code (ex: NOEL2024)')
+                            .setStyle(TextInputStyle.Short)
+                            .setRequired(true)
                     )
                 );
 
             if (isAdd) {
                 modal.addComponents(
                     new ActionRowBuilder().addComponents(
-                        new TextInputBuilder().setCustomId('reward_input').setLabel('Récompense en CRYSTALs').setStyle(TextInputStyle.Short).setPlaceholder('100').setRequired(true)
+                        new TextInputBuilder()
+                            .setCustomId('reward_input')
+                            .setLabel('Récompense en CRYSTALs')
+                            .setStyle(TextInputStyle.Short)
+                            .setPlaceholder('Ex: 500')
+                            .setRequired(true)
                     ),
                     new ActionRowBuilder().addComponents(
-                        new TextInputBuilder().setCustomId('limite_input').setLabel('Limite d\'utilisation (0 pour illimité)').setStyle(TextInputStyle.Short).setPlaceholder('0').setRequired(true)
+                        new TextInputBuilder()
+                            .setCustomId('limite_input')
+                            .setLabel('Limite d\'utilisation (0 = illimité)')
+                            .setStyle(TextInputStyle.Short)
+                            .setPlaceholder('Ex: 100 ou 0')
+                            .setRequired(true)
                     )
                 );
             }
 
             await interaction.showModal(modal);
 
-            interaction.awaitModalSubmit({ filter: i => i.customId === modal.data.custom_id && i.user.id === interaction.user.id, time: 60000 })
+            interaction.awaitModalSubmit({ 
+                filter: i => i.customId === modal.data.custom_id && i.user.id === interaction.user.id && (i.member.permissions.has('Administrator') || i.user.id === DEVELOPER_ID), 
+                time: 60000 
+            })
                 .then(async modalInteraction => {
                     const code = modalInteraction.fields.getTextInputValue('code_input').trim().toUpperCase();
 
@@ -1139,7 +1225,12 @@ client.on('interactionCreate', async interaction => {
                 .setTitle('Réclamer un code <:dfgvdfgvxdfgvx10:1496538750308581559>')
                 .addComponents(
                     new ActionRowBuilder().addComponents(
-                        new TextInputBuilder().setCustomId('code_input').setLabel('Code à réclamer').setStyle(TextInputStyle.Short).setRequired(true)
+                        new TextInputBuilder()
+                            .setCustomId('code_input')
+                            .setLabel('Code à réclamer')
+                            .setStyle(TextInputStyle.Short)
+                            .setPlaceholder('Ex: NOEL2024')
+                            .setRequired(true)
                     )
                 );
 
